@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+import streamlit as st
+from pathlib import Path
 from reportlab.platypus import Table, TableStyle
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.lib.colors import HexColor
@@ -77,7 +79,7 @@ def merge_examiner_info_from_files(file_objs: list) -> tuple[dict, list]:
     return merged, warnings
 
 
-def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=None, manual_info=None, logo_path=None, wechsler_data=None,TCI_scores=None,PAT_scores=None):
+def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=None, manual_info=None, wechsler_data=None,TCI_scores=None,PAT_scores=None):
     width, height = A4
 
     # 📌 Pretendard 폰트 등록 (경로를 환경에 맞게 수정)
@@ -116,7 +118,9 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
     # ✅ 초록색 막대 제거 → 로고 삽입
     try:
-        logo = ImageReader("C:\\Users\\HATAE\\Downloads\\PythonProject2\\logo.png")
+
+        # 현재 스크립트와 동일한 디렉토리의 logo.png 경로 지정
+        logo_path = Path(__file__).parent / "logo.png"
         # 왼쪽 상단(초록색 바가 있던 위치)에 로고 배치
         c.drawImage(logo, 60, height - 120, width=70, height=70, mask='auto')
     except:
