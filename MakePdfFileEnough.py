@@ -120,7 +120,7 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
     try:
 
         # 현재 스크립트와 동일한 디렉토리의 logo.png 경로 지정
-        logo_path = Path(__file__).parent / "logo.png"
+        logo = Path(__file__).parent / "logo.png"
         # 왼쪽 상단(초록색 바가 있던 위치)에 로고 배치
         c.drawImage(logo, 60, height - 120, width=70, height=70, mask='auto')
     except:
