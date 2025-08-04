@@ -2,5 +2,6 @@ streamlit
 reportlab
 numpy
 pdfplumber
-openpyxl
 PyMuPDF
+openpyxl
+google-api-python-client
