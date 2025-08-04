@@ -1,7 +1,36 @@
 import pdfplumber
 import re
 import json
+import pdfplumber
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload  # ✅ 추가
+from oauth2client.service_account import ServiceAccountCredentials
+import io
 
+def load_google_service_account_key():
+    return st.secrets["gcp"]
+
+@st.cache_resource(ttl=3000, show_spinner=False)
+def get_drive_service():
+    scope = ['https://www.googleapis.com/auth/drive']
+    key_dict = load_google_service_account_key()
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
+    return build('drive', 'v3', credentials=creds)
+
+@st.cache_data(ttl=3000, show_spinner=False)
+def load_temperament_dict_from_drive():
+    service = get_drive_service()
+
+    file_id = "15ekhcGi28YNnSR6nBF-bKulkVNLwZs9g"  # ✅ Google Drive 파일 ID
+
+    request = service.files().get_media(fileId=file_id)
+    fh = io.BytesIO()
+    downloader = MediaIoBaseDownload(fh, request)
+    done = False
+    while not done:
+        status, done = downloader.next_chunk()
+    fh.seek(0)
+    return json.load(fh)
 # ✅ 이상적 범위 (기존 유지)
 ideal_ranges = {
     "지지표현": (65, 85),
@@ -41,9 +70,8 @@ def extract_pat_percentiles(pdf_path):
     evaluated = evaluate_results(numbers) if len(numbers) == 8 else []
     return {"백분위": numbers, "결과": evaluated}
 
-# ✅ JSON 설명 불러오기
-with open("판단별_설명.json", "r", encoding="utf-8") as f:
-    explain_data = json.load(f)
+
+explain_data = load_temperament_dict_from_drive()
 
 # ✅ 최종 출력
 def print_result_with_explain(evaluated):
