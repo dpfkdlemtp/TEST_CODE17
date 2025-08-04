@@ -6,6 +6,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload  # ✅ 추가
 from oauth2client.service_account import ServiceAccountCredentials
 import io
+import streamlit as st
 
 def load_google_service_account_key():
     return st.secrets["gcp"]
@@ -117,3 +118,4 @@ if __name__ == "__main__":
         # print("백분위:", data["백분위"])
         # print("결과:", data["결과"])
         # print_result_with_explain(data["결과"])
+
