@@ -2,7 +2,36 @@ import json
 import re
 import pdfplumber
 import os
+import pdfplumber
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload  # ✅ 추가
+from oauth2client.service_account import ServiceAccountCredentials
+import io
 
+def load_google_service_account_key():
+    return st.secrets["gcp"]
+
+@st.cache_resource(ttl=3000, show_spinner=False)
+def get_drive_service():
+    scope = ['https://www.googleapis.com/auth/drive']
+    key_dict = load_google_service_account_key()
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
+    return build('drive', 'v3', credentials=creds)
+
+@st.cache_data(ttl=3000, show_spinner=False)
+def load_temperament_dict_from_drive():
+    service = get_drive_service()
+
+    file_id = "1lbrWh85_80gZ8oBDq88-s-U2azXpFWkV"  # ✅ Google Drive 파일 ID
+
+    request = service.files().get_media(fileId=file_id)
+    fh = io.BytesIO()
+    downloader = MediaIoBaseDownload(fh, request)
+    done = False
+    while not done:
+        status, done = downloader.next_chunk()
+    fh.seek(0)
+    return json.load(fh)
 # ---------------------------
 # 1) TCI 백분위 H/M/L 추출
 # ---------------------------
@@ -54,12 +83,7 @@ def extract_tci_m_sd(pdf_path):
             m_sd_result[subscale] = {"M": float(match.group(2)), "SD": float(match.group(3))}
     return m_sd_result
 
-# ---------------------------
-# 3) JSON 로드
-# ---------------------------
-def load_temperament_dict(json_path: str) -> dict:
-    with open(json_path, "r", encoding="utf-8") as f:
-        return json.load(f)
+
 
 # ---------------------------
 # 4) 사회적 민감성 보정 로직
@@ -129,7 +153,8 @@ def main(pdf_path: str, json_path: str):
     for k, v in m_sd.items():
         print(f"{k}: M={v['M']}, SD={v['SD']}")
 
-    data = load_temperament_dict(json_path)
+    data = load_temperament_dict_from_drive()
+
     hml_values = {
         "자극추구": percentiles.get("자극추구", {}).get("level", "M"),
         "위험회피": percentiles.get("위험회피", {}).get("level", "M"),
