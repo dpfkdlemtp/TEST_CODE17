@@ -8,8 +8,8 @@ from 추출_PAT_산출 import PAT_extract_all_scores
 import traceback
 
 print("=================================start==============================")
-st.set_page_config(page_title="굿이너프 리포트 생성기", layout="centered")
-st.title("📄 굿이너프 리포트 생성기")
+st.set_page_config(page_title="리포트 생성기", layout="centered")
+st.title("📄 리포트 생성기")
 
 
 score_category ={
@@ -311,4 +311,5 @@ if submit:
         st.error(f"🚨 PDF 생성 중 오류가 발생했습니다: {e}")
         st.text("🔍 전체 오류 내용:")
         st.text(traceback.format_exc())  # 전체 스택 추적 로그 출력
+
 
