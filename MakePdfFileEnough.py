@@ -140,6 +140,24 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
     ## PAGE 1 목차
 
+    try:
+        # 현재 스크립트와 동일한 디렉토리의 logoBack.png 경로 지정
+        logoBack = Path(__file__).parent / "logoBack.png"
+        # 배경 로고: 페이지 중앙에 반투명하게 배치
+        # 실제 투명 처리는 ReportLab에서 직접 안 되므로, 미리 투명 처리된 PNG 사용
+        logo_width = 300
+        logo_height = 300
+        c.drawImage(
+            logoBack,
+            (width - logo_width) / 2,
+            (height - logo_height) / 2,
+            width=logo_width,
+            height=logo_height,
+            mask='auto'
+        )
+    except:
+        print("⚠️ 로고 배경 이미지를 불러오지 못했습니다. 경로를 확인하세요.")
+    
     # 상단 연두색 줄
     c.setFillColor(HexColor("#D3F6B3"))
     c.rect(0, height - 15, width, 15, fill=1, stroke=0)
@@ -2423,4 +2441,5 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
 if __name__ == "__main__":
     generate_full_pdf()
+
 
