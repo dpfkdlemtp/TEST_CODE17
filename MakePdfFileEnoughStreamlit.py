@@ -61,7 +61,7 @@ if not st.session_state.authenticated:
 
             if password_input == correct_password:
                 st.session_state.authenticated = True
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.error("❌ 비밀번호가 일치하지 않습니다.")
         except Exception as e:
@@ -373,6 +373,7 @@ if submit:
         st.error(f"🚨 PDF 생성 중 오류가 발생했습니다: {e}")
         st.text("🔍 전체 오류 내용:")
         st.text(traceback.format_exc())  # 전체 스택 추적 로그 출력
+
 
 
 
