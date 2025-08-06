@@ -36,6 +36,26 @@ score_category ={
     "처리속도" : "PSI"
 }
 
+# 현재 스크립트와 동일한 디렉토리의 logoBack.png 경로 지정
+logoBack = Path(__file__).parent / "logoBack.png"
+
+def make_back_logo(c,width,height):
+    try:
+        # 배경 로고: 페이지 중앙에 반투명하게 배치
+        # 실제 투명 처리는 ReportLab에서 직접 안 되므로, 미리 투명 처리된 PNG 사용
+        logo_width = 300
+        logo_height = 300
+        c.drawImage(
+            logoBack,
+            (width - logo_width) / 2,
+            height / 3 - logo_height / 2,
+            width=logo_width,
+            height=logo_height,
+            mask='auto'
+        )
+    except:
+        print("⚠️ 로고 배경 이미지를 불러오지 못했습니다. 경로를 확인하세요.")
+
 def merge_examiner_info_from_files(file_objs: list) -> tuple[dict, list]:
     from collections import defaultdict, Counter
     from 검사자정보추출 import extract_info
@@ -139,25 +159,8 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
     c.showPage()
 
     ## PAGE 1 목차
+    make_back_logo(c,width, height)
 
-    try:
-        # 현재 스크립트와 동일한 디렉토리의 logoBack.png 경로 지정
-        logoBack = Path(__file__).parent / "logoBack.png"
-        # 배경 로고: 페이지 중앙에 반투명하게 배치
-        # 실제 투명 처리는 ReportLab에서 직접 안 되므로, 미리 투명 처리된 PNG 사용
-        logo_width = 300
-        logo_height = 300
-        c.drawImage(
-            logoBack,
-            (width - logo_width) / 2,
-            (height - logo_height) / 2,
-            width=logo_width,
-            height=logo_height,
-            mask='auto'
-        )
-    except:
-        print("⚠️ 로고 배경 이미지를 불러오지 못했습니다. 경로를 확인하세요.")
-    
     # 상단 연두색 줄
     c.setFillColor(HexColor("#D3F6B3"))
     c.rect(0, height - 15, width, 15, fill=1, stroke=0)
@@ -219,7 +222,9 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
     c.showPage()
 
-    # --- ✅ 3페이지: 심리검사 소개 ---
+    ## PAGE02 - 심리검사 소개
+    make_back_logo(c, width, height)
+
     c.setFillColor(HexColor("#D3F6B3"))
     c.rect(0, height - 15, width, 15, fill=1, stroke=0)
 
@@ -312,7 +317,8 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
     c.showPage()
 
-    ## PAGE 3 수검자 정보 및 검사태도 ---
+    ## PAGE 03 수검자 정보 및 검사태도 ---
+    make_back_logo(c, width, height)
 
     c.setFillColor(HexColor("#D3F6B3"))
     c.rect(0, height - 15, width, 15, fill=1, stroke=0)
@@ -441,6 +447,7 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
     ##########
     ## PAGE 04 지능검사 요약
+    make_back_logo(c, width, height)
 
     def draw_score_bars(c, base_x, base_y, gray_value, green_value):
         """
@@ -806,6 +813,8 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
     ###############################
     ## PAGE 05 지능검사 요약 2
+    make_back_logo(c, width, height)
+
     # 제목
     c.setFillColor(HexColor("#D3F6B3"))
     c.rect(0, height - 15, width, 15, fill=1, stroke=0)
@@ -1225,6 +1234,7 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
     ################################
     ## PAGE 6 지능검사 요약 3 게이지
+    make_back_logo(c, width, height)
 
     # 제목
     c.setFillColor(HexColor("#D3F6B3"))
@@ -1380,6 +1390,7 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
     ################################
 
     ## PAGE 07 지능검사 요약 및 제언
+    make_back_logo(c, width, height)
 
     def draw_multiline_text(c, x, y, text, max_width, line_height=10, font_size=8.5, font_name="Pretendard-SemiBold"):
         c.setFont(font_name, font_size)
@@ -1462,6 +1473,7 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
     ################################
     ## PAGE 08 TCI - 유형 그래프
+    make_back_logo(c, width, height)
 
     def draw_circle_icon(c, center_x, center_y, text="L", color="#FFA800"):
         c.setStrokeColor(HexColor(color))
@@ -1741,7 +1753,8 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
     c.showPage()
 
     ###############################
-    #PAGE 09 - 기질1 기질2
+    ## PAGE 09 - 기질1 기질2
+    make_back_logo(c, width, height)
 
     # 제목
     c.setFillColor(HexColor("#D3F6B3"))
@@ -1814,7 +1827,8 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
     c.showPage()
 
     ################################
-    ##PAGE 10 - 기질 제언
+    ## PAGE 10 - 기질 제언
+    make_back_logo(c, width, height)
 
     def draw_multiline_text(c, x, y, text, max_width, line_height=10, font_name="Pretendard-SemiBold", font_size=8.5):
         c.setFont(font_name, font_size)
@@ -1888,6 +1902,8 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
     ################################
     ## PAGE 11  - 성격
+    make_back_logo(c, width, height)
+
     def draw_multiline_text(c, x, y, text, max_width, line_height=10, font_name="Pretendard-SemiBold", font_size=8.5):
         c.setFont(font_name, font_size)
         c.setFillColor(HexColor("#000000"))
@@ -1979,6 +1995,7 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
     ################################
     ## PAGE 12 - 부모양육태도검사 1
+    make_back_logo(c, width, height)
 
     # 제목
     c.setFillColor(HexColor("#D3F6B3"))
@@ -2204,6 +2221,7 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
     ################################
     ## PAGE 13 - 부모양육태도검사 2
+    make_back_logo(c, width, height)
 
     # 제목
     c.setFillColor(HexColor("#D3F6B3"))
@@ -2429,6 +2447,7 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
     ################################
     ## PAGE 14 - 부모양육태도검사 3
+    #make_back_logo(c, width, height)
 
     # c.showPage()
 
@@ -2441,5 +2460,4 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
 if __name__ == "__main__":
     generate_full_pdf()
-
 
