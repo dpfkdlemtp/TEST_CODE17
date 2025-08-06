@@ -6,9 +6,71 @@ from 추출_지능검사_통합 import extract_all_scores
 from 추출_TCI_산출 import TCI_extract_all_scores
 from 추출_PAT_산출 import PAT_extract_all_scores
 import traceback
+import io
+import json
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
+from oauth2client.service_account import ServiceAccountCredentials
 
+def load_google_service_account_key():
+    return st.secrets["gcp"]
+
+@st.cache_resource(ttl=3000, show_spinner=False)
+def get_drive_service():
+    scope = ['https://www.googleapis.com/auth/drive']
+    key_dict = load_google_service_account_key()
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
+    return build('drive', 'v3', credentials=creds)
+
+@st.cache_data(ttl=3000, show_spinner=False)
+def load_password_from_drive():
+    service = get_drive_service()
+    file_id = "1GRb3MVsb4TcaveVlGFZgCEPqmg5TBww6"  # 패스워드 JSON 파일 ID
+    request = service.files().get_media(fileId=file_id)
+    fh = io.BytesIO()
+    downloader = MediaIoBaseDownload(fh, request)
+    done = False
+    while not done:
+        status, done = downloader.next_chunk()
+    fh.seek(0)
+    return json.load(fh)
+    
 print("=================================start==============================")
+
 st.set_page_config(page_title="리포트 생성기", layout="centered")
+
+# 비밀번호 인증 세션 상태
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if "password_attempted" not in st.session_state:
+    st.session_state.password_attempted = ""  # 최근 입력한 값
+
+# 인증되지 않았을 경우
+if not st.session_state.authenticated:
+    st.title("🔒 접근 제한")
+
+    with st.form("password_form", clear_on_submit=True):  # ✅ 입력창 자동 초기화
+        password_input = st.text_input("접근 비밀번호를 입력하세요", type="password", value="")
+        submitted = st.form_submit_button("확인")  # ✅ Enter도 인식됨
+
+    if submitted:
+        try:
+            password_json = load_password_from_drive()
+            correct_password = password_json.get("password", "")
+
+            if password_input == correct_password:
+                st.session_state.authenticated = True
+                st.experimental_rerun()
+            else:
+                st.error("❌ 비밀번호가 일치하지 않습니다.")
+        except Exception as e:
+            st.error("🚨 비밀번호 로딩 중 오류 발생")
+            st.text(str(e))
+
+    st.stop()
+
+
 st.title("📄 리포트 생성기")
 
 
@@ -311,5 +373,6 @@ if submit:
         st.error(f"🚨 PDF 생성 중 오류가 발생했습니다: {e}")
         st.text("🔍 전체 오류 내용:")
         st.text(traceback.format_exc())  # 전체 스택 추적 로그 출력
+
 
 
