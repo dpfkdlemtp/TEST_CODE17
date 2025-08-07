@@ -1896,7 +1896,7 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
             lines = block.strip().split('\n')
 
             if lines[0].startswith("- "):
-                title = lines[0].strip()
+                title = lines[0].strip()[2:]  # "- " 제거
                 content = "\n".join(lines[1:]).strip()
             else:
                 title = ""
@@ -1950,9 +1950,17 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
     text_y = height - 190  # 요약 박스보다 살짝 아래
     text_width = 450
 
+
     draw_multiline_text(c, text_x, text_y, summary_text[0][0], max_width=text_width, font_name="Pretendard-Bold")
 
     draw_multiline_text(c, text_x, text_y - 35, summary_text[0][1], max_width=text_width, font_name="Pretendard-Regular")
+
+    for i, j in enumerate(summary_text):
+        if i==0:
+            continue
+        else:
+            draw_multiline_text(c, text_x, text_y - 150 * i, summary_text[i][0], max_width=text_width, font_name="Pretendard-Bold")
+            draw_multiline_text(c, text_x, text_y - 150 * i - 35, summary_text[i][1], max_width=text_width, font_name="Pretendard-Regular")
 
     # summary_text=TCI_scores[4][0][4]
     # summary_text += "\n" + TCI_scores[4][1][4]
