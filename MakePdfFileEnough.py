@@ -668,7 +668,7 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
         c.setFont("Pretendard-Regular", 12)
         c.setFillColor(HexColor("#3DB419"))
-        c.drawString(369, height - 390, str(weakness_label)+" ["+score_category[weakness_label[:4]] + "]")
+        c.drawString(369, height - 390, str(weakness_label)+" ["+score_category[weakness_label[:4].strip()] + "]")
         #c.drawString(385, height - 390, str(weakness_label))
 
         c.setLineWidth(1)
@@ -2518,4 +2518,5 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
 if __name__ == "__main__":
     generate_full_pdf()
+
 
