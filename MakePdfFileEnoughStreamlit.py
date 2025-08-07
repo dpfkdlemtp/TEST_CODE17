@@ -35,9 +35,7 @@ def load_password_from_drive():
     fh.seek(0)
     return json.load(fh)
     
-print("=================================start==============================")
-
-st.set_page_config(page_title="리포트 생성기", layout="centered")
+st.set_page_config(page_title="굿이너프 보고서 생성기", layout="centered")
 
 # 비밀번호 인증 세션 상태
 if "authenticated" not in st.session_state:
@@ -71,7 +69,9 @@ if not st.session_state.authenticated:
     st.stop()
 
 
-st.title("📄 리포트 생성기")
+print("=================================start==============================")
+
+st.title("📄 굿이너프 보고서 생성기")
 
 
 score_category ={
@@ -86,11 +86,11 @@ score_category ={
 }
 
 # 1. 파일 업로드 영역
-uploaded_files = st.file_uploader("📂 검사자 PDF 업로드", type="pdf", accept_multiple_files=True)
+uploaded_files = st.file_uploader("📂 피검사자 PDF 업로드", type="pdf", accept_multiple_files=True)
 
 # 2. 업로드 확인
 if not uploaded_files:
-    st.info("👆 먼저 검사자 PDF 파일을 업로드해주세요.")
+    st.info("👆 먼저 피검사자 PDF 파일을 업로드해주세요.")
     st.stop()
 
 # 3. 임시 파일로 저장
@@ -209,7 +209,7 @@ for i in IntelligenceDomain.keys():
     default_summary[i]=IntelligenceDomain[i][4]
 
 # 6. 수정 가능한 검사자 정보 입력 폼
-st.subheader("📝 검사자 정보 확인 및 수정")
+st.subheader("📝 피검사자 정보")
 
 with st.form("examiner_info_form"):
     name = st.text_input("이름(성별,나이)", merged_info["이름"])
@@ -220,16 +220,31 @@ with st.form("examiner_info_form"):
     attitude = st.text_area("검사태도", merged_info.get("검사태도", ""))
     # ✅ 여기서 요약문도 함께 수정하도록 추가
 
-    st.subheader("🧠 지능검사 요약문 확인 및 수정")
+    st.subheader("🧠 지능검사 (자동생성)")
     for i in default_summary.keys():
-        default_summary[i] = st.text_area(f"📝 {i} 요약문", default_summary[i], height=120)
+        default_summary[i] = st.text_area(f"📝 {i} 요약", default_summary[i], height=120)
 
     # 최종 요약 및 제언
-    st.subheader("📌 지능검사 최종 요약 및 제언")
     final_summary = st.text_area(
-        "",
+        "지능검사 최종 요약 및 제언",
         height=250,
         placeholder="예: 전반적으로 우수한 지능을 보이며, 특히 언어이해 영역에서 높은 수행을 보였습니다. ..."
+    )
+
+
+    # 최종 요약 및 제언
+    st.subheader("🤓 기질 및 성격 검사 (자동 생성)")
+    기질1 = st.text_area(
+        "기질 1 (줄바꿈 2번하는 경우 선으로 구분)",
+        height=250,
+        placeholder="예: 전반적으로 우수한 지능을 보이며, 특히 언어이해 영역에서 높은 수행을 보였습니다. ...",
+        value=TCI_scores[3][0][4]
+    )
+    기질2 = st.text_area(
+        "기질 2 (줄바꿈 2번하는 경우 선으로 구분)",
+        height=250,
+        placeholder="예: 전반적으로 우수한 지능을 보이며, 특히 언어이해 영역에서 높은 수행을 보였습니다. ...",
+        value=TCI_scores[3][1][4]
     )
 
     submit = st.form_submit_button("📄 PDF 리포트 생성")
@@ -339,6 +354,18 @@ if submit:
         except:
             continue
 
+    print("TCI_SCORE")
+    for i, j in enumerate(TCI_scores):
+        print(i, j)
+
+    TCI_scores[3][0][4] = 기질1
+    TCI_scores[3][1][4] = 기질2
+
+    # print("TEST",   parse_tci_paragraph(TCI_scores[4][0][4]))
+    # print("TEST2", parse_tci_paragraph(TCI_scores[4][1][4]))
+    # print("TEST3", parse_tci_paragraph(TCI_scores[4][2][4]))
+
+
 
     # PDF 생성
     output_path = os.path.join(tempfile.gettempdir(), "generated_report.pdf")
@@ -373,7 +400,4 @@ if submit:
         st.error(f"🚨 PDF 생성 중 오류가 발생했습니다: {e}")
         st.text("🔍 전체 오류 내용:")
         st.text(traceback.format_exc())  # 전체 스택 추적 로그 출력
-
-
-
 
