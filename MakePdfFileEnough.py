@@ -18,7 +18,7 @@ import numpy as np
 from reportlab.platypus import Paragraph, Frame
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_LEFT
-
+import re
 
 from collections import defaultdict, Counter
 from 검사자정보추출 import extract_info
@@ -35,7 +35,6 @@ score_category ={
     "지각추론" : "PRI",
     "처리속도" : "PSI"
 }
-
 # 현재 스크립트와 동일한 디렉토리의 logoBack.png 경로 지정
 logoBack = Path(__file__).parent / "logoBack.png"
 
@@ -109,28 +108,67 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
     c = canvas.Canvas(output_path, pagesize=A4)
 
-    def draw_multiline_text(c, x, y, text, max_width, line_height=10, font_size=9, font_name="Pretendard-SemiBold"):
+    def draw_multiline_text(c, x, y, text, max_width, line_height=20, font_size=9, font_name="Pretendard-SemiBold"):
         c.setFont(font_name, font_size)
         c.setFillColor(HexColor("#000000"))
 
-        lines = []
-        for paragraph in text.split('\n'):
-            words = paragraph.split()
+        current_y = y
+        paragraphs = text.strip().split('\n')  # 한 줄 줄바꿈 기준
+
+        for sub in paragraphs:
+            if not sub.strip():  # 빈 줄인 경우
+                current_y -= line_height
+                continue
+
+            words = sub.strip().split()
             line = ""
             for word in words:
                 test_line = line + word + " "
                 if stringWidth(test_line, font_name, font_size) <= max_width:
                     line = test_line
                 else:
-                    lines.append(line.strip())
+                    c.drawString(x, current_y, line.strip())
+                    current_y -= line_height
                     line = word + " "
             if line:
-                lines.append(line.strip())
-            lines.append("")  # paragraph space
+                c.drawString(x, current_y, line.strip())
+                current_y -= line_height
 
-        for i, line in enumerate(lines):
-            c.drawString(x, y - i * line_height, line)
+    def draw_multiline_separateline_text(c, x, y, text, max_width, line_height=20, font_size=8.5,
+                                        font_name="Pretendard-SemiBold"):
+        c.setFont(font_name, font_size)
+        c.setFillColor(HexColor("#000000"))
 
+        # ➊ 세 줄 이상 줄바꿈(\n\n\n 이상)으로 문단 분리
+        paragraphs = re.split(r'\n{3,}', text.strip())
+
+        current_y = y
+        for idx, paragraph in enumerate(paragraphs):
+            # ➋ 각 문단 내에서 줄바꿈(\n)을 기준으로 나눔
+            subparagraphs = paragraph.split('\n')
+            for sub in subparagraphs:
+                words = sub.strip().split()
+                line = ""
+
+                for word in words:
+                    test_line = line + word + " "
+                    if stringWidth(test_line, font_name, font_size) <= max_width:
+                        line = test_line
+                    else:
+                        c.drawString(x, current_y, line.strip())
+                        current_y -= line_height
+                        line = word + " "
+                if line:
+                    c.drawString(x, current_y, line.strip())
+                    current_y -= line_height
+
+            # ➌ 마지막 문단이 아니라면 구분선 추가
+            if idx != len(paragraphs) - 1:
+                current_y -= 5
+                c.setStrokeColor(HexColor("#DDDDDD"))
+                c.setLineWidth(1.0)
+                c.line(x, current_y, x + max_width - 20, current_y)
+                current_y -= 20  # 선 아래 여백
     ## PAGE 0 표지
 
     c.setFillColor(HexColor("#D3F6B3"))  # 연두색 배경
@@ -1260,7 +1298,7 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
         # ✅ 설명 박스 배경
         c.setFillColor(HexColor("#D9F1D1"))
-        c.rect(x, y + 88, 450, 24, fill=1, stroke=0)
+        c.rect(x, y + 88, 470, 24, fill=1, stroke=0)
 
         # ✅ 초록 제목 (지표명만 초록)
         c.setFont("Pretendard-Bold", 10)
@@ -1392,28 +1430,6 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
     ## PAGE 07 지능검사 요약 및 제언
     make_back_logo(c, width, height)
 
-    def draw_multiline_text(c, x, y, text, max_width, line_height=10, font_size=8.5, font_name="Pretendard-SemiBold"):
-        c.setFont(font_name, font_size)
-        c.setFillColor(HexColor("#000000"))
-
-        lines = []
-        for paragraph in text.split('\n'):
-            words = paragraph.split()
-            line = ""
-            for word in words:
-                test_line = line + word + " "
-                if stringWidth(test_line, font_name, font_size) <= max_width:
-                    line = test_line
-                else:
-                    lines.append(line.strip())
-                    line = word + " "
-            if line:
-                lines.append(line.strip())
-            lines.append("")  # paragraph space
-
-        for i, line in enumerate(lines):
-            c.drawString(x, y - i * line_height, line)
-
     # 제목
     c.setFillColor(HexColor("#D3F6B3"))
     c.rect(0, height - 15, width, 15, fill=1, stroke=0)
@@ -1431,7 +1447,7 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
     # ✅ 설명 박스 배경
     c.setFillColor(HexColor("#D9F1D1"))
-    c.rect(60, height - 160, 450, 24, fill=1, stroke=0)
+    c.rect(60, height - 160, 470, 24, fill=1, stroke=0)
 
     # ✅ 초록 제목 (지표명만 초록)
     c.setFont("Pretendard-Bold", 10)
@@ -1452,14 +1468,22 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
     #     "심화 활동을 통해 아동의 인지적 강점을 더욱 강화할 수 있겠습니다."
     # )
 
+
+    # 2. 상단 연두색 텍스트 박스
+    box_x = 60
+    box_y = height - 610
+    box_width = width - 125
+    box_height = 450
+    c.setFillColor(HexColor("#F7FBF5"))
+    c.rect(box_x, box_y, box_width, box_height, fill=1, stroke=0)
+
+
     # 글자 출력 시작 좌표 (요약 박스 아래)
     text_x = 72
     text_y = height - 190  # 요약 박스보다 살짝 아래
     text_width = 450
 
     draw_multiline_text(c, text_x, text_y, final_summary, max_width=text_width)
-
-    c.showPage()
 
     c.setFont("Pretendard-Bold", 9)
     c.setFillColor(HexColor("#535353"))
@@ -1469,7 +1493,7 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
     c.setFillColor(HexColor("#A9A9A9"))
     c.drawRightString(width - 47.5, 40, "07")
 
-
+    c.showPage()
 
     ################################
     ## PAGE 08 TCI - 유형 그래프
@@ -1708,6 +1732,19 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
                 c.setFillColor(black)
                 c.drawCentredString(graph_center, bar_y + 4, abbr)
 
+                # ✅ 그래프 끝에 백분위 수치 표시
+                c.setFont("Pretendard-Bold", 9)
+                c.setFillColor(graph_color)
+                label_offset = 3
+
+                if per >= 50:
+                    # 오른쪽 끝에 표시 (그래프 끝 + 약간 오른쪽)
+                    c.drawString(bar_x + bar_length + label_offset, bar_y + 4, str(per))
+                else:
+                    # 왼쪽 끝에 표시 (그래프 시작 - 글자 길이 고려해서 왼쪽)
+                    text_width = c.stringWidth(str(per), "Pretendard-Bold", 9)
+                    c.drawString(bar_x - text_width - label_offset, bar_y + 4, str(per))
+
         c.drawCentredString(start_x + col_widths[0] / 2, y + row_height * 6 - 5, "기질")
         c.drawCentredString(start_x + col_widths[0] / 2, y + row_height * 2 - 5, "성격")
         # 범례 그리기
@@ -1771,10 +1808,10 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
     c.setLineWidth(1)
     c.line(60, height - 110, width - 60, height - 110)
 
-    ### 기질[타고난 특성]
+    ### 기질[대인관계 능력]
     # ✅ 설명 박스 배경
     c.setFillColor(HexColor("#D9F1D1"))
-    c.rect(60, height - 160, 450, 24, fill=1, stroke=0)
+    c.rect(60, height - 160, 470, 24, fill=1, stroke=0)
 
     # ✅ 초록 제목 (지표명만 초록)
     c.setFont("Pretendard-Bold", 10)
@@ -1783,17 +1820,25 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
     summary_text=TCI_scores[3][0][4]
 
+    # 2. 상단 연두색 텍스트 삽입 박스
+    box_x = 60
+    box_y = height - 410
+    box_width = width - 125
+    box_height = 250
+    c.setFillColor(HexColor("#F7FBF5"))
+    c.rect(box_x, box_y, box_width, box_height, fill=1, stroke=0)
+
     # 글자 출력 시작 좌표 (요약 박스 아래)
     text_x = 72
     text_y = height - 190  # 요약 박스보다 살짝 아래
     text_width = 450
 
-    draw_multiline_text(c, text_x, text_y, summary_text, max_width=text_width)
+    draw_multiline_separateline_text(c, text_x, text_y, summary_text, max_width=text_width)
 
     ### 기질[대인관계 능력]
     # ✅ 설명 박스 배경
     c.setFillColor(HexColor("#D9F1D1"))
-    c.rect(60, height - 460, 450, 24, fill=1, stroke=0)
+    c.rect(60, height - 460, 470, 24, fill=1, stroke=0)
 
     # ✅ 초록 제목 (지표명만 초록)
     c.setFont("Pretendard-Bold", 10)
@@ -1808,12 +1853,20 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
     #     "즉, 필요한 순간에 적극적으로 자기주장을 할 수 있지만 감정의 조절이 필요한 순간에는 적절히 제어할 수 있다는 강점이 있습니다\n"
     # )
 
+    # 2. 하단 연두색 텍스트 삽입 박스
+    box_x = 60
+    box_y = height - 710
+    box_width = width - 125
+    box_height = 250
+    c.setFillColor(HexColor("#F7FBF5"))
+    c.rect(box_x, box_y, box_width, box_height, fill=1, stroke=0)
+
     # 글자 출력 시작 좌표 (요약 박스 아래)
     text_x = 72
     text_y = height - 490  # 요약 박스보다 살짝 아래
     text_width = 450
 
-    draw_multiline_text(c, text_x, text_y, summary_text, max_width=text_width)
+    draw_multiline_separateline_text(c, text_x, text_y, summary_text, max_width=text_width)
 
     c.setFont("Pretendard-Bold", 9)
     c.setFillColor(HexColor("#535353"))
@@ -1830,27 +1883,32 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
     ## PAGE 10 - 기질 제언
     make_back_logo(c, width, height)
 
-    def draw_multiline_text(c, x, y, text, max_width, line_height=10, font_name="Pretendard-SemiBold", font_size=8.5):
-        c.setFont(font_name, font_size)
-        c.setFillColor(HexColor("#000000"))
+    def parse_tci_paragraph(text):
+        # 개행 정리
+        text = text.strip()
 
-        lines = []
-        for paragraph in text.split('\n'):
-            words = paragraph.split()
-            line = ""
-            for word in words:
-                test_line = line + word + " "
-                if stringWidth(test_line, font_name, font_size) <= max_width:
-                    line = test_line
-                else:
-                    lines.append(line.strip())
-                    line = word + " "
-            if line:
-                lines.append(line.strip())
-            lines.append("")  # paragraph space
+        # - 로 시작하는 블록들을 분리
+        blocks = re.split(r'\n(?=- )', text)
 
-        for i, line in enumerate(lines):
-            c.drawString(x, y - i * line_height, line)
+        result = []
+
+        for i, block in enumerate(blocks):
+            lines = block.strip().split('\n')
+
+            if lines[0].startswith("- "):
+                title = lines[0].strip()
+                content = "\n".join(lines[1:]).strip()
+            else:
+                title = ""
+                content = "\n".join(lines).strip()
+
+            if title:
+                result.append([title])
+            if content:
+                result[-1].append(content)
+
+        return result
+
 
     # 제목
     c.setFillColor(HexColor("#D3F6B3"))
@@ -1870,23 +1928,42 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
     ### 기질[타고난 특성]
     # ✅ 설명 박스 배경
     c.setFillColor(HexColor("#D9F1D1"))
-    c.rect(60, height - 160, 450, 24, fill=1, stroke=0)
+    c.rect(60, height - 160, 470, 24, fill=1, stroke=0)
 
     # ✅ 초록 제목 (지표명만 초록)
     c.setFont("Pretendard-Bold", 10)
     c.setFillColor(HexColor("#000000"))
     c.drawString(60 + 12, height - 150, f"기질 최적화 양육 방법")
 
-    summary_text=TCI_scores[4][0][4]
-    summary_text += "\n" + TCI_scores[4][1][4]
+    summary_text = parse_tci_paragraph(TCI_scores[4][0][4])
 
+    # 1단 연두색 텍스트 삽입 박스
+    box_x = 60
+    box_y = height - 310
+    box_width = width - 125
+    box_height = 150
+    c.setFillColor(HexColor("#F7FBF5"))
+    c.rect(box_x, box_y, box_width, box_height, fill=1, stroke=0)
 
     # 글자 출력 시작 좌표 (요약 박스 아래)
     text_x = 72
     text_y = height - 190  # 요약 박스보다 살짝 아래
     text_width = 450
 
-    draw_multiline_text(c, text_x, text_y, summary_text, max_width=text_width)
+    draw_multiline_text(c, text_x, text_y, summary_text[0][0], max_width=text_width, font_name="Pretendard-Bold")
+
+    draw_multiline_text(c, text_x, text_y - 35, summary_text[0][1], max_width=text_width, font_name="Pretendard-Regular")
+
+    # summary_text=TCI_scores[4][0][4]
+    # summary_text += "\n" + TCI_scores[4][1][4]
+    #
+    #
+    # # 글자 출력 시작 좌표 (요약 박스 아래)
+    # text_x = 72
+    # text_y = height - 190  # 요약 박스보다 살짝 아래
+    # text_width = 450
+    #
+    # draw_multiline_text(c, text_x, text_y, summary_text, max_width=text_width)
 
     c.setFont("Pretendard-Bold", 9)
     c.setFillColor(HexColor("#535353"))
@@ -1904,29 +1981,6 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
     ## PAGE 11  - 성격
     make_back_logo(c, width, height)
 
-    def draw_multiline_text(c, x, y, text, max_width, line_height=10, font_name="Pretendard-SemiBold", font_size=8.5):
-        c.setFont(font_name, font_size)
-        c.setFillColor(HexColor("#000000"))
-
-        lines = []
-        for paragraph in text.split('\n'):
-            words = paragraph.split()
-            line = ""
-            for word in words:
-                test_line = line + word + " "
-                if stringWidth(test_line, font_name, font_size) <= max_width:
-                    line = test_line
-                else:
-                    lines.append(line.strip())
-                    line = word + " "
-            if line:
-                lines.append(line.strip())
-            lines.append("")  # paragraph space
-
-        for i, line in enumerate(lines):
-            c.drawString(x, y - i * line_height, line)
-
-        # 제목
 
     c.setFillColor(HexColor("#D3F6B3"))
     c.rect(0, height - 15, width, 15, fill=1, stroke=0)
@@ -1945,7 +1999,7 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
     ### 기질[타고난 특성]
     # ✅ 설명 박스 배경
     c.setFillColor(HexColor("#FEEED4"))
-    c.rect(60, height - 160, 450, 24, fill=1, stroke=0)
+    c.rect(60, height - 160, 470, 24, fill=1, stroke=0)
 
     # ✅ 초록 제목 (지표명만 초록)
     c.setFont("Pretendard-Bold", 10)
@@ -1965,7 +2019,7 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
     ### 기질[타고난 특성]
     # ✅ 설명 박스 배경
     c.setFillColor(HexColor("#FEEED4"))
-    c.rect(60, height - 360, 450, 24, fill=1, stroke=0)
+    c.rect(60, height - 360, 470, 24, fill=1, stroke=0)
 
     # ✅ 초록 제목 (지표명만 초록)
     c.setFont("Pretendard-Bold", 10)
@@ -2190,14 +2244,12 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
     # ✅ 설명 박스 배경
     c.setFillColor(HexColor("#D9F1D1")) #FEEDD3
-    c.rect(60, height - 470, 450, 24, fill=1, stroke=0)
+    c.rect(60, height - 470, 470, 24, fill=1, stroke=0)
 
     # ✅ 초록 제목 (지표명만 초록)
     c.setFont("Pretendard-Bold", 10)
     c.setFillColor(HexColor("#000000"))
     c.drawString(60 + 12, height - 460, f"요약 및 제언")
-
-    print("PAT",PAT_scores)
 
 
     final_summary = "".join(PAT_scores['ideal'][1])
@@ -2416,14 +2468,12 @@ def generate_full_pdf(output_path="goodenough_full_report.pdf", input_pdf_paths=
 
     # ✅ 설명 박스 배경
     c.setFillColor(HexColor("#FEEDD3")) #FEEDD3
-    c.rect(60, height - 470, 450, 24, fill=1, stroke=0)
+    c.rect(60, height - 470, 470, 24, fill=1, stroke=0)
 
     # ✅ 초록 제목 (지표명만 초록)
     c.setFont("Pretendard-Bold", 10)
     c.setFillColor(HexColor("#000000"))
     c.drawString(60 + 12, height - 460, f"요약 및 제언")
-
-    print("PAT",PAT_scores)
 
 
     final_summary = "".join(PAT_scores['ideal'][3])
