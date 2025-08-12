@@ -2,7 +2,7 @@ import streamlit as st
 import tempfile
 import os
 from MakePdfFileEnough import generate_full_pdf, merge_examiner_info_from_files
-from 추출_지능검사_통합 import extract_all_scores
+from 추출_지능검사_통합 import INT_extract_all_scores
 from 추출_TCI_산출 import TCI_extract_all_scores
 from 추출_PAT_산출 import PAT_extract_all_scores
 import traceback
@@ -463,4 +463,5 @@ if submit:
         st.error(f"🚨 PDF 생성 중 오류가 발생했습니다: {e}")
         st.text("🔍 전체 오류 내용:")
         st.text(traceback.format_exc())  # 전체 스택 추적 로그 출력
+
 
