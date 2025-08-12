@@ -21,19 +21,26 @@ subtest_name_map = [
 ]
 
 
-def extract_all_scores(pdf_path, original_name=None):
+def INT_extract_all_scores(pdf_path, original_name=None):
     filename = (original_name or os.path.basename(pdf_path)).upper()
     result = {"지표점수": {}, "소검사점수": {}}
 
-    if "WPPSI" in filename:
-        result["지표점수"] = extract_wppsi_scores_from_page3(pdf_path)
-        result["소검사점수"] = extract_wppsi_subtest_scores(pdf_path)
-    elif "WISC" in filename:
+    if "wppsi" in filename.lower():
+        result["지표점수"] = extract_wppsi_scores_from_page3(pdf_path, filename)
+        result["소검사점수"] = extract_wppsi_subtest_scores(pdf_path, filename)
+        print('통합 WPPSI', result["지표점수"], result["소검사점수"])
+    elif "wisc" in filename.lower():
         result["지표점수"] = extract_wisc_scores_from_page3(pdf_path)
         result["소검사점수"] = extract_wisc_subtest_scores(pdf_path)
-    elif "WAIS" in filename:
+        print('통합 WISC',result["지표점수"],result["소검사점수"])
+    elif "wais" in filename.lower():
         result["지표점수"] = extract_combination_scores_from_page4(pdf_path)
         result["소검사점수"] = extract_subtest_scores_from_page3(pdf_path, subtest_name_map)
+        print('통합 WAIS', result["지표점수"], result["소검사점수"])
+
+        # 🔁 WAIS의 '전체검사' → '전체IQ'로 키명 일괄 변경
+        if "전체검사" in result["지표점수"]:
+            result["지표점수"]["전체IQ"] = result["지표점수"].pop("전체검사")
 
     return result, filename
 
@@ -110,14 +117,12 @@ def format_subtest_scores_excel(scores):
 # ✅ 하드코딩 실행 진입점
 # -------------------------------
 if __name__ == "__main__":
-    pdf_path = r"C:\Users\HATAE\Downloads\PythonProject2\K-WPPSI-IV(유아용)_4세미만.pdf"
-
     if not os.path.exists(pdf_path):
         print(f"❗ 파일이 존재하지 않습니다: {pdf_path}")
         exit(1)
 
     print(f"✅ PDF 분석 시작: {pdf_path}")
-    scores, filename = extract_all_scores(pdf_path)
+    scores, filename = INT_extract_all_scores(pdf_path)
     is_wais = "WAIS" in filename
 
     print("\n📌 [지표 점수]")
