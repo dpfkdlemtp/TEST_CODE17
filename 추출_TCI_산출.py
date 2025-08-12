@@ -9,6 +9,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 import io
 import streamlit as st
 
+
 def load_google_service_account_key():
     return st.secrets["gcp"]
 
@@ -132,7 +133,6 @@ def build_matching_Summary_keys(hml: dict, m_sd: dict) -> dict:
 # 6) JSON 유사 키 탐색
 # ---------------------------
 def find_best_matching_key(search_key: str, data: dict) -> tuple:
-    print('sk',search_key,'data',data)
     if search_key in data:
         return search_key, "✅ 완전 매칭"
     candidates = [key for key in data if search_key.replace(" ", "") in key.replace(" ", "")]
@@ -143,18 +143,24 @@ def find_best_matching_key(search_key: str, data: dict) -> tuple:
 # ---------------------------
 # 7) 통합 실행
 # ---------------------------
+
+def load_temperament_dict(json_path: str) -> dict:
+    with open(json_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
 def main(pdf_path: str, json_path: str):
     percentiles = extract_tci_percentiles(pdf_path)
-    print("\n▶ TCI-RS 백분위 (H/M/L 구분)")
-    for k, v in percentiles.items():
-        print(f"{k} = {v['percentile']} ({v['level']})")
+    # print("\n▶ TCI-RS 백분위 (H/M/L 구분)")
+    # for k, v in percentiles.items():
+    #     print(f"{k} = {v['percentile']} ({v['level']})")
 
     m_sd = extract_tci_m_sd(pdf_path)
-    print("\n▶ TCI-RS 하위척도 M(SD)")
-    for k, v in m_sd.items():
-        print(f"{k}: M={v['M']}, SD={v['SD']}")
+    # print("\n▶ TCI-RS 하위척도 M(SD)")
+    # for k, v in m_sd.items():
+    #     print(f"{k}: M={v['M']}, SD={v['SD']}")
 
-    data = load_temperament_dict_from_drive()
+    data = load_temperament_dict(json_path)
 
     hml_values = {
         "자극추구": percentiles.get("자극추구", {}).get("level", "M"),
@@ -164,20 +170,20 @@ def main(pdf_path: str, json_path: str):
         "자율성": percentiles.get("자율성", {}).get("level", "M"),
         "연대감": percentiles.get("연대감", {}).get("level", "M"),
     }
-    print(f"\n▶ 추출된 H/M/L: {hml_values}")
+    # print(f"\n▶ 추출된 H/M/L: {hml_values}")
 
     matching_keys = build_matching_Temperament_keys(hml_values, m_sd)
-    print(f"\n▶ 매칭 키: {matching_keys}")
+    # print(f"\n▶ 매칭 키: {matching_keys}")
 
     TempanswerList=[]
-    print("\n▶ 최종 결과")
+    # print("\n▶ 최종 결과")
     for part, key in matching_keys.items():
         summary_dict = data.get(f"{part}", {})
         matched_key, status = find_best_matching_key(key, data.get(part, {}))
-        print(f"\n[{part}]")
-        print(f"- 추출된 키: {key}")
-        print(f"- 매칭된 키: {matched_key if matched_key else '없음'}")
-        print(f"- 매칭 상태: {status}")
+        # print(f"\n[{part}]")
+        # print(f"- 추출된 키: {key}")
+        # print(f"- 매칭된 키: {matched_key if matched_key else '없음'}")
+        # print(f"- 매칭 상태: {status}")
         if matched_key:
             TempanswerList.append([part,key,matched_key if matched_key else '없음',status,summary_dict[matched_key].replace("**", "")])
             print(f"- 설명:\n{summary_dict[matched_key]}")
@@ -211,7 +217,7 @@ def main(pdf_path: str, json_path: str):
 def TCI_extract_all_scores(pdf_path, original_name=None, json_file=None):
     filename = (original_name or os.path.basename(pdf_path)).upper()
     if "TCI" in filename:
-        result = main(pdf_path,json_path="temperament_categorized.json")
+        result = main(pdf_path,json_path="TCI.json")
 
     return result, filename
 
@@ -230,4 +236,3 @@ if __name__ == "__main__":
         print("-", k)
 
     main(pdf_file, json_file)
-
