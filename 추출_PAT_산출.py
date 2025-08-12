@@ -32,6 +32,8 @@ def load_temperament_dict_from_drive():
         status, done = downloader.next_chunk()
     fh.seek(0)
     return json.load(fh)
+
+
 # ✅ 이상적 범위 (기존 유지)
 ideal_ranges = {
     "지지표현": (65, 85),
@@ -71,8 +73,11 @@ def extract_pat_percentiles(pdf_path):
     evaluated = evaluate_results(numbers) if len(numbers) == 8 else []
     return {"백분위": numbers, "결과": evaluated}
 
-
-explain_data = load_temperament_dict_from_drive()
+# ✅ JSON 설명 불러오기
+with open("PAT.json", "r", encoding="utf-8") as f:
+    explain_data = json.load(f)
+#
+# explain_data = load_temperament_dict_from_drive()
 
 # ✅ 최종 출력
 def print_result_with_explain(evaluated):
@@ -90,13 +95,13 @@ def print_result_with_explain(evaluated):
             non_ideal_titles.append(key)
             non_ideal_contents.append(explain_data[key]["지나침"])
 
-    print(f"[이상적임] 영역 설명 - {', '.join(ideal_titles)}")
-    for text in ideal_contents:
-        print(text + "\n")
-
-    print(f"[미흡함 또는 지나침] 영역 설명 - {', '.join(non_ideal_titles)}")
-    for text in non_ideal_contents:
-        print(text + "\n")
+    # print(f"[이상적임] 영역 설명 - {', '.join(ideal_titles)}")
+    # for text in ideal_contents:
+    #     print(text + "\n")
+    #
+    # print(f"[미흡함 또는 지나침] 영역 설명 - {', '.join(non_ideal_titles)}")
+    # for text in non_ideal_contents:
+    #     print(text + "\n")
 
     return  [ideal_titles, ideal_contents, non_ideal_titles, non_ideal_contents]
 
@@ -118,4 +123,3 @@ if __name__ == "__main__":
         # print("백분위:", data["백분위"])
         # print("결과:", data["결과"])
         # print_result_with_explain(data["결과"])
-
