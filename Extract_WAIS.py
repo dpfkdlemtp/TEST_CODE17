@@ -16,6 +16,29 @@ subtest_name_map = [
     ("처리속도", "기호쓰기")
 ]
 
+# ✅ WAIS 조합점수 -> 진단분류 매핑
+def classify_wais(score):
+    try:
+        s = int(str(score).strip())
+    except:
+        return None
+    # 경계 중복을 피하기 위해 반열린구간으로 처리
+    # 0~69 매우낮음, 70~79 낮음, 80~89 평균 하, 90~110 평균(포함), 111~119 평균 상, 120~129 우수, 130~ 매우우수
+    if s < 70:
+        return "매우낮음"
+    elif s < 80:
+        return "낮음"
+    elif s < 90:
+        return "평균 하"
+    elif s <= 110:  # 90~110 포함
+        return "평균"
+    elif s < 120:
+        return "평균 상"
+    elif s < 130:
+        return "우수"
+    else:
+        return "매우우수"
+
 
 def extract_combination_scores_from_page4(pdf_path):
     with pdfplumber.open(pdf_path) as pdf:
@@ -46,6 +69,13 @@ def extract_combination_scores_from_page4(pdf_path):
             label = "신뢰구간" if row[0] == "95%신뢰구간" else row[0]
             value = row[col]
             result_dict[domain][label] = value
+
+    if isinstance(result_dict, dict):
+        for domain, values in result_dict.items():
+            if "조합점수" in values:
+                values["지표점수"] = values.pop("조합점수")  # 키 변경
+            raw = values.get("지표점수")
+            values["진단분류"] = classify_wais(raw)
 
     return result_dict
 
@@ -94,7 +124,7 @@ if __name__ == "__main__":
                 globals()[var_name] = v
 
         print("\n📌 변수 테스트:")
-        print(f"언어이해_조합점수 = {언어이해_조합점수}")
+        print(f"언어이해_조합점수 = {언어이해_지표점수}")
         print(f"전체검사_백분위 = {전체검사_백분위}")
 
     print("\n▶ 소검사 환산점수 추출")
