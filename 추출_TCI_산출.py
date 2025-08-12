@@ -160,7 +160,7 @@ def main(pdf_path: str, json_path: str):
     # for k, v in m_sd.items():
     #     print(f"{k}: M={v['M']}, SD={v['SD']}")
 
-    data = load_temperament_dict(json_path)
+    data = load_temperament_dict_from_drive()
 
     hml_values = {
         "자극추구": percentiles.get("자극추구", {}).get("level", "M"),
@@ -236,3 +236,4 @@ if __name__ == "__main__":
         print("-", k)
 
     main(pdf_file, json_file)
+
