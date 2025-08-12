@@ -1,10 +1,11 @@
+from collections import OrderedDict
 import re
 import pdfplumber
 
 # -------------------------------
 # ✅ 1) WPPSI 지표 점수 추출 (3페이지)
 # -------------------------------
-def extract_wppsi_scores_from_page3(pdf_path):
+def extract_wppsi_scores_from_page3(pdf_path,filename):
     with pdfplumber.open(pdf_path) as pdf:
         page = pdf.pages[2]
         text = page.extract_text()
@@ -13,7 +14,7 @@ def extract_wppsi_scores_from_page3(pdf_path):
     result = {}
 
     # ✅ 도메인 구분 (4세 이상 / 미만)
-    if "4세이상" in pdf_path or "4세 이상" in pdf_path:
+    if "4세이상" in filename or "4세 이상" in filename:
         domains = ["언어이해", "시공간", "유동추론", "작업기억", "처리속도", "전체IQ"]
     else:
         domains = ["언어이해", "시공간", "작업기억", "전체IQ"]
@@ -50,20 +51,22 @@ def extract_wppsi_scores_from_page3(pdf_path):
             var_name = f"{domain}_{k}".replace("%", "퍼센트").replace("~", "_").replace(" ", "_")
             globals()[var_name] = v
 
+    print('result1',result)
     return result
 
 # -------------------------------
 # ✅ 2) WPPSI 소검사 점수 추출 (2페이지)
 # -------------------------------
-def extract_wppsi_subtest_scores(pdf_path):
+def extract_wppsi_subtest_scores(pdf_path, filename):
     with pdfplumber.open(pdf_path) as pdf:
         page = pdf.pages[1]  # ✅ WPPSI도 2페이지 인덱스 1
         text = page.extract_text()
 
     lines = text.split("\n")
 
-    if "4세이상" in pdf_path or "4세 이상" in pdf_path:
-        index = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    if "4세이상" in filename or "4세 이상" in filename:
+        domain_order = ["언어이해", "시공간", "유동추론", "처리속도", "작업기억"]
+        index = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14]
         # ✅ WPPSI 4세 미만 소검사명 (K-WPPSI 매뉴얼 순서 기반)
         subtest_name_map = [
             ("시공간", "토막짜기"),
@@ -77,9 +80,13 @@ def extract_wppsi_subtest_scores(pdf_path):
             ("작업기억", "위치찾기"),
             ("시공간", "모양맞추기"),
             ("언어이해", "어휘"),
+            #("처리속도", "동물짝짓기"),
+            ("언어이해", "이해"),
+            #("처리속도", "선택하기(비정렬)"),
+            #("처리속도", "선택하기(정렬)"),
         ]
     else:
-
+        domain_order = ["언어이해", "시공간", "작업기억"]
         index = [2, 3, 4, 5, 6, 7, 8]
         # ✅ WPPSI 4세 미만 소검사명 (K-WPPSI 매뉴얼 순서 기반)
         subtest_name_map = [
@@ -111,6 +118,14 @@ def extract_wppsi_subtest_scores(pdf_path):
         globals()[var_name] = value
         result[var_name] = value
 
+    # ✅ 도메인 순서에 따라 정렬
+    result = OrderedDict(
+        sorted(result.items(),
+               key=lambda x: (domain_order.index(x[0].split("_")[0]),
+                              subtest_name_map.index((x[0].split("_")[0], x[0].split("_", 1)[1]))))
+    )
+
+    print('result2', result)
     return result
 
 # -------------------------------
