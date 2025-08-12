@@ -74,10 +74,7 @@ def extract_pat_percentiles(pdf_path):
     return {"백분위": numbers, "결과": evaluated}
 
 # ✅ JSON 설명 불러오기
-with open("PAT.json", "r", encoding="utf-8") as f:
-    explain_data = json.load(f)
-#
-# explain_data = load_temperament_dict_from_drive()
+explain_data = load_temperament_dict_from_drive()
 
 # ✅ 최종 출력
 def print_result_with_explain(evaluated):
@@ -123,3 +120,4 @@ if __name__ == "__main__":
         # print("백분위:", data["백분위"])
         # print("결과:", data["결과"])
         # print_result_with_explain(data["결과"])
+
