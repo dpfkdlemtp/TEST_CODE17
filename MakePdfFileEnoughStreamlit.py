@@ -22,7 +22,7 @@ def get_drive_service():
     creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
     return build('drive', 'v3', credentials=creds)
 
-def load_password_from_drive(file_id):
+def load_temperament_dict_from_drive(file_id):
     service = get_drive_service()
     request = service.files().get_media(fileId=file_id)
     fh = io.BytesIO()
@@ -52,7 +52,7 @@ if not st.session_state.authenticated:
 
     if submitted:
         try:
-            password_json = load_password_from_drive("1GRb3MVsb4TcaveVlGFZgCEPqmg5TBww6")
+            password_json = load_temperament_dict_from_drive("1GRb3MVsb4TcaveVlGFZgCEPqmg5TBww6")
             correct_password = password_json.get("password", "")
 
             if password_input == correct_password:
@@ -602,4 +602,5 @@ if submit:
         st.error(f"🚨 PDF 생성 중 오류가 발생했습니다: {e}")
         st.text("🔍 전체 오류 내용:")
         st.text(traceback.format_exc())  
+
 
