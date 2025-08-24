@@ -89,7 +89,7 @@ def merge_examiner_info_from_files(file_objs: list) -> tuple[dict, list]:
     return merged, warnings
 
 
-def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, INT_data=None, TCI_scores=None, PAT_scores=None, TCI_filename=None, PAT_filename=None):
+def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, INT_data=None, TCI_scores=None, PAT_scores=None, TCI_filename=None, PAT_filename=None, custom_pages=None, examiner=None): #250819
     c = canvas.Canvas(output_path, pagesize=A4)
 
     INT_fileflag = 1 if INT_data is not None else 0
@@ -114,8 +114,20 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
         final_summary = INT_data["final_summary"]
         INT_filename = INT_data["INT_filename"]
 
+    if PAT_fileflag == 1:
+        categories = ["지지표현", "합리적 설명", "상취압력", "간섭", "처벌", "감독", "과잉기대", "비일관성"]
 
-    def makePageNum(pageNum):
+        PAT_graph_score = [
+            (cat, perc, res)
+            for cat, perc, res in zip(categories, PAT_scores["백분위"], PAT_scores["결과"])
+        ]
+
+    page_num_counter = 0
+
+    def makePageNum():
+        nonlocal page_num_counter
+        page_num_counter += 1
+        pageNum = page_num_counter
         # 하단 페이지 번호
         c.setFont("Pretendard-Bold", 9)
         c.setFillColor(HexColor("#535353"))
@@ -143,9 +155,9 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
             )
         except:
             print("⚠️ 로고 배경 이미지를 불러오지 못했습니다. 경로를 확인하세요.")
-    def draw_multiline_text(c, x, y, text, max_width, line_height=20, font_size=9, font_name="Pretendard-SemiBold"):
+    def draw_multiline_text(c, x, y, text, max_width, line_height=20, font_size=9, font_name="Pretendard-SemiBold", font_color="#000000"):
         c.setFont(font_name, font_size)
-        c.setFillColor(HexColor("#000000"))
+        c.setFillColor(HexColor(font_color))
 
         lines = []
         for paragraph in text.split('\n\n'):
@@ -161,10 +173,8 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
             if line:
                 lines.append(line.strip())
             lines.append("")  # paragraph space
-
         for i, line in enumerate(lines):
             c.drawString(x, y - i * line_height, line)
-
     def draw_multiline_separateline_text(c, x, y, text, max_width, line_height=20, font_size=8.5,
                                          font_name="Pretendard-SemiBold"):
         c.setFont(font_name, font_size)
@@ -200,6 +210,24 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
                 c.setLineWidth(1.0)
                 c.line(x, current_y, x + max_width - 20, current_y)
                 current_y -= 20  # 선 아래 여백
+    def get_line_count(text, max_width, font_size=9, font_name="Pretendard-SemiBold", line_height=20 ):
+        from reportlab.pdfbase.pdfmetrics import stringWidth
+        lines = []
+        for paragraph in text.split('\n\n'):
+            words = paragraph.split()
+            line = ""
+            for word in words:
+                test_line = line + word + " "
+                if stringWidth(test_line, font_name, font_size) <= max_width:
+                    line = test_line
+                else:
+                    lines.append(line.strip())
+                    line = word + " "
+            if line:
+                lines.append(line.strip())
+            lines.append("")
+        return ((len(lines)-1) * line_height + 10)
+
     def draw_score_bars(c, base_x, base_y, gray_value, green_value):
         """
         회색(기준값: 116)과 초록색(가변값) 막대 그래프 그리기
@@ -391,6 +419,255 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
             c.drawRightString(x + 75 + bar_total_width + 26, y_bar+2, f"{v}%")
 
             y_bar -= 22
+    def draw_parenting_graph(c, x=60, y=150, width=480, height=280, items=None):
+        from reportlab.lib.colors import HexColor
+
+        num_items = len(items)
+        bar_width = width / num_items
+        bar_max_height = height
+        label_font = "Pretendard-Regular"
+        bold_font = "Pretendard-Bold"
+
+        # ✅ 항목별 이상적인 범위 배경과 점선
+        ideal_ranges = {
+            "지지표현": (65, 85),
+            "합리적 설명": (65, 85),
+            "상취압력": (50, 70),
+            "간섭": (40, 60),
+            "처벌": (30, 50),
+            "감독": (30, 50),
+            "과잉기대": (20, 40),
+            "비일관성": (10, 30)
+        }
+
+        for i, (label, value, result) in enumerate(items):
+            if label not in ideal_ranges:
+                continue
+            low, high = ideal_ranges[label]
+            bx = x + i * bar_width + bar_width * 0.25
+            bar_x_center = bx + bar_width * 0.5 / 2
+
+            # 이상 범위 배경
+            ideal_bottom = y + (low / 100) * bar_max_height
+            ideal_top = y + (high / 100) * bar_max_height
+            c.setFillColor(HexColor("#FFF0C3"))
+            c.setLineWidth(0.5)
+            c.setDash(1, 0)
+            c.rect(bx-bar_width/4, ideal_bottom, bar_width, ideal_top - ideal_bottom, fill=1, stroke=0)
+
+
+        # 배경 그리드
+        for i in range(0, 101, 20):
+            grid_y = y + (i / 100) * bar_max_height
+            c.setStrokeColor(HexColor("#DDDDDD"))
+            c.setLineWidth(1)
+            c.setDash(1, 2)
+            c.line(x, grid_y, x + width, grid_y)
+
+        # ✅ 각 항목에 세로 점선 추가
+        c.setStrokeColor(HexColor("#CCCCCC"))
+        c.setLineWidth(1)
+        c.setDash(1, 2)
+
+        for i in range(num_items):
+            bx = x + i * bar_width + bar_width * 0.75
+            bar_center_x = bx + bar_width * 0.5 / 2
+            c.line(bar_center_x, y, bar_center_x, y + bar_max_height)
+
+        # 막대 그래프
+        for i, (label, value, result) in enumerate(items):
+            bx = x + i * bar_width + bar_width * 0.40
+            bh = (value / 100) * bar_max_height
+            by = y
+
+            # 막대
+            c.setFillColor(HexColor("#80D167"))
+            c.rect(bx, by, bar_width * 0.2, bh, fill=1, stroke=0)
+
+        # Y축 기준선 및 백분위 숫자
+        c.setFont(label_font, 7)
+        c.setFillColor(HexColor("#666666"))
+        for i in range(0, 101, 10):
+            label_y = y + (i / 100) * bar_max_height - 3
+            c.drawRightString(x - 5, label_y, str(i))
+
+        # ========================
+        # ✅ 아래쪽 표 추가하기
+        # ========================
+        cell_width = bar_width
+        cell_height = 16
+        table_y = y - 20  # 그래프 아래로 충분히 떨어뜨리기
+
+        header_bg = HexColor("#E1F4DA")
+        ideal_bg = HexColor("#F5F4D8")
+
+        # 상단 제목행
+        c.setFont("Pretendard-SemiBold", 7.5)
+        for i, (label, _, _) in enumerate(items):
+            cx = x + i * cell_width
+            c.setFillColor(header_bg)
+            c.setStrokeColorRGB(1, 1, 1)  # 테두리 색 흰색 (RGB 1,1,1)
+            c.setDash()
+            c.setLineWidth(2)  # 테두리 두께 2pt
+            c.rect(cx, table_y, cell_width, cell_height, fill=1, stroke=1)
+            c.setFillColor(HexColor("#000000"))
+            c.setFont("Pretendard-SemiBold", 6.5)
+            c.drawCentredString(cx + cell_width / 2, table_y + 6, label)
+
+        # 백분위 행
+        for i, (_, value, _) in enumerate(items):
+            cx = x + i * cell_width
+            cy = table_y - cell_height
+            c.setFillColor(HexColor("#F7FCF5"))
+            c.setStrokeColorRGB(1, 1, 1)  # 테두리 색 흰색 (RGB 1,1,1)
+            c.setDash()
+            c.setLineWidth(2)  # 테두리 두께 2pt
+            c.rect(cx, cy, cell_width, cell_height, fill=1, stroke=1)
+            c.setFillColor(HexColor("#000000"))
+            c.setFont("Pretendard-Regular", 6.5)
+            c.drawCentredString(cx + cell_width / 2, cy + 6, str(value))
+
+        # 결과 행
+        for i, (_, _, result) in enumerate(items):
+            cx = x + i * cell_width
+            cy = table_y - 2 * cell_height
+            if "지나침" in result or "미흡" in result:
+                text_color = HexColor("#D20000")
+            else:
+                text_color = HexColor("#000000")
+            bg_color = ideal_bg if "이상적임" in result else HexColor("#FFFFFF")
+
+            c.setFillColor(bg_color)
+            c.setLineWidth(2)  # 테두리 두께 2pt
+            c.setStrokeColorRGB(1, 1, 1)  # 테두리 색 흰색 (RGB 1,1,1)
+            c.rect(cx, cy, cell_width, cell_height, fill=1, stroke=1)
+            c.setFillColor(text_color)
+            c.setFont("Pretendard-Regular", 6.5)
+            c.drawCentredString(cx + cell_width / 2, cy + 6, result)
+
+        # 왼쪽 열: "백분위", "결과"
+        left_titles = ["백분위", "결과"]
+        c.setFont("Pretendard-SemiBold", 8)
+        for i, label in enumerate(left_titles):
+            cy = table_y - (i + 1) * cell_height
+            c.setFillColor(header_bg)
+            c.setStrokeColorRGB(1, 1, 1)  # 테두리 색 흰색 (RGB 1,1,1)
+            c.setDash()
+            c.setLineWidth(2)  # 테두리 두께 2pt
+            c.rect(x - 40, cy, 40, cell_height, fill=1, stroke=1)
+            c.setFillColor(HexColor("#000000"))
+            c.setFont("Pretendard-SemiBold", 6.5)
+            c.drawCentredString(x - 20, cy + 6, label)
+        # ✅ 오른쪽 위 범례 박스 추가
+        legend_x = x + width + 20
+        legend_y = y + height - 10
+        legend_w = 100
+        legend_h = 42
+
+        c.setFillColor(HexColor("#FFFFFF"))
+        c.rect(legend_x, legend_y - legend_h, legend_w, legend_h, fill=1, stroke=0)
+
+        # 색상 사각형 및 텍스트
+        legend_items = [
+            ("#FFF0C3", "이상적인 범위"),
+            ("#80D167", "자녀보고"),
+            (None, "단위: 백분위(%ile)")
+        ]
+
+        c.setFont("Pretendard-Regular", 7)
+        for i, (color, label) in enumerate(legend_items):
+            lx = legend_x + 64 * i - legend_x / 3
+            if color:
+                c.setFillColor(HexColor(color))
+                c.rect(lx + 2, legend_y+23, 16, 8, fill=1, stroke=0)
+                c.setFillColor(HexColor("#000000"))
+                c.drawString(lx + 22, legend_y+25, label)
+            else:
+                c.setFillColor(HexColor("#000000"))
+                c.drawString(lx - 14, legend_y+25, label)
+
+    def draw_box_with_text(c, x, y, max_width, text, line_height=20, font_size=9, font_name="Pretendard-SemiBold",
+                           font_color="#000000", padding=10, box_color="#F2F2F2"):
+        """
+        Calculates box size based on text, draws a box, and then draws multiline text inside.
+
+        Args:
+            c (canvas.Canvas): The ReportLab canvas object.
+            x (float): The x-coordinate of the top-left corner of the box.
+            y (float): The y-coordinate of the top-left corner of the box.
+            max_width (float): The maximum width of the text box.
+            text (str): The text to be drawn.
+            line_height (float): The height of each line.
+            font_size (float): The font size for the text.
+            font_name (str): The font name.
+            font_color (str): The color of the text.
+            padding (float): The padding inside the box.
+            box_color (str): The fill color of the box.
+        """
+        # Calculate the required height for the text
+        text_height = get_line_count(text, max_width - 2 * padding, font_size, font_name, line_height)
+
+        # Calculate the total box height including padding
+        box_height = text_height + 2 * padding
+
+        # Draw the box
+        # The y coordinate for the rect function is the bottom-left corner
+        # so we need to calculate it from the top-left y
+        box_y_bottom = y - box_height
+        c.setFillColor(HexColor(box_color))
+        c.rect(x, box_y_bottom, max_width, box_height, fill=1, stroke=0)
+
+        # Draw the multiline text inside the box
+        # The y coordinate for the text needs to be adjusted for the padding
+        text_x = x + padding
+        text_y = y - padding
+
+        c.setFont(font_name, font_size)
+        c.setFillColor(HexColor(font_color))
+
+        lines = []
+        for paragraph in text.split('\n\n'):
+            words = paragraph.split()
+            line = ""
+            for word in words:
+                test_line = line + word + " "
+                if stringWidth(test_line, font_name, font_size) <= max_width - 2 * padding:
+                    line = test_line
+                else:
+                    lines.append(line.strip())
+                    line = word + " "
+            if line:
+                lines.append(line.strip())
+            lines.append("")  # paragraph space
+
+        for i, line in enumerate(lines):
+            c.drawString(text_x, text_y - i * line_height, line)
+
+    def parse_paragraph(text):
+        # 개행 정리
+        text = text.strip()
+
+        # - 로 시작하는 블록들을 분리
+        blocks = re.split(r'\n(?=- )', text)
+
+        result = []
+
+        for i, block in enumerate(blocks):
+            lines = block.strip().split('\n')
+
+            if lines[0].startswith("- "):
+                title = lines[0].strip()[2:]  # "- " 제거
+                content = "\n".join(lines[1:]).strip()
+            else:
+                title = ""
+                content = "\n".join(lines).strip()
+
+            if title:
+                result.append([title])
+            if content:
+                result[-1].append(content)
+
+        return result
 
     ## PAGE 00 표지
     ## PAGE 1 - 목차
@@ -486,7 +763,7 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
             y -= 160  # 다음 항목 위치
 
         # 하단 페이지 번호
-        makePageNum(1)
+        makePageNum()
 
         c.showPage()
     def makePage02():
@@ -612,10 +889,10 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
 
             y -= text_height + 60  # 다음 박스로 이동
 
-        makePageNum(2)
+        makePageNum()
 
         c.showPage()
-    def makePage03(manual_info):
+    def makePage03(manual_info, ):
         make_back_logo()
 
         c.setFillColor(HexColor("#D3F6B3"))
@@ -715,7 +992,7 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
             draw_multiline_text(c, box_x + 20, box_y + 390, summary_text, max_width=text_width, font_size=11)
 
         # ✅ 페이지 번호
-        makePageNum(3)
+        makePageNum()
 
         c.showPage()
     def makePage04(fsiq, percentile, strength_label, strength_score, weakness_label, weakness_score, sub_scores, ci_min, ci_max):
@@ -828,7 +1105,7 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
         c.drawCentredString(420, height - 720, str(ci_min)+"~"+str(ci_max))
 
         # 페이지 번호
-        makePageNum(4)
+        makePageNum()
 
         c.showPage()
     ## PAGE 05 지능검사 그래프 3개
@@ -1367,14 +1644,7 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
             draw_subtest_scores_final_WISC(c, domains, subtests, x=105, y=70)
 
         # 페이지 번호
-        # ✅ 페이지 번호
-        c.setFont("Pretendard-Bold", 9)
-        c.setFillColor(HexColor("#535353"))
-        c.drawRightString(width - 60, 40, "굿이너프")
-
-        c.setFont("Pretendard-Regular", 9)
-        c.setFillColor(HexColor("#A9A9A9"))
-        c.drawRightString(width - 47.5, 40, "05")
+        makePageNum()
 
         c.showPage()
     ## PAGE 06 지능검사 게이지
@@ -1491,11 +1761,9 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
         domain_counts = Counter(domains_list)
 
         labels=[]
-        print('int',INT_data)
         for i in IntelligenceDomain.keys():
             Intdomain=IntelligenceDomain[i][0] + " 지표(" + IntelligenceDomain[i][1] + ")"
             labels.append((Intdomain, int(IntelligenceDomain[i][2]), IntelligenceDomain[i][3], IntelligenceDomain[i][4],domain_counts[i]))
-            print(domain_counts[i])
 
         gap = 0
         for i, (title, score, level, desc, count) in enumerate(labels):
@@ -1503,15 +1771,9 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
             gap += 135
             if count > 2:
                 gap += 10 * (count - 2)
-                print(gap)
 
-        c.setFont("Pretendard-Bold", 9)
-        c.setFillColor(HexColor("#535353"))
-        c.drawRightString(width - 60, 40, "굿이너프")
-
-        c.setFont("Pretendard-Regular", 9)
-        c.setFillColor(HexColor("#A9A9A9"))
-        c.drawRightString(width - 47.5, 40, "06")
+        # 페이지 번호
+        makePageNum()
 
         c.showPage()
     ## PAGE 07 지능검사 요약 및 제언
@@ -1559,13 +1821,21 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
 
         draw_multiline_text(c, text_x, text_y, final_summary, max_width=text_width)
 
-        c.setFont("Pretendard-Bold", 9)
-        c.setFillColor(HexColor("#535353"))
-        c.drawRightString(width - 60, 40, "굿이너프")
+        # 페이지 번호
+        makePageNum()
 
-        c.setFont("Pretendard-Regular", 9)
-        c.setFillColor(HexColor("#A9A9A9"))
-        c.drawRightString(width - 47.5, 40, "07")
+        if lastPage == "INT":
+            # 폰트 및 크기 설정
+            c.setFillColor(HexColor("#000000"))
+            c.setFont("Pretendard-Bold",10)
+
+            text_width = stringWidth(examiner, "Pretendard-Bold", 10)
+            x_position = width - text_width - 20
+            y_position = 20
+
+            # 텍스트 그리기
+            c.drawString(x_position, y_position, examiner)
+
 
         c.showPage()
     ## PAGE 08 TCI - 유형 그래프
@@ -1703,8 +1973,8 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
 
                 # 기준점
                 l_center = percent_to_x(17.5)
-                m_center = percent_to_x(55)
-                h_center = percent_to_x(92.5)
+                m_center = percent_to_x(50)
+                h_center = percent_to_x(82.5)
 
                 # 화살표 그리기 함수
                 def draw_arrow(c, x, y, direction="left"):
@@ -1738,14 +2008,14 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
                 c.setStrokeColor(HexColor("#AAAAAA"))
                 c.setLineWidth(0.5)
                 c.line(percent_to_x(35), legend_y - row_height * 8.5 , percent_to_x(35), legend_y - row_height / 2)
-                c.line(percent_to_x(75), legend_y - row_height * 8.5 , percent_to_x(75), legend_y - row_height / 2)
+                c.line(percent_to_x(65), legend_y - row_height * 8.5 , percent_to_x(65), legend_y - row_height / 2)
 
                 # 기준선 실선 수평
                 c.setDash(1, 0)
                 c.setStrokeColor(HexColor("#666666"))
                 c.setLineWidth(0.5)
                 c.line(l_center - 20, legend_y, l_center + 20, legend_y)
-                c.line(m_center - 20, legend_y, m_center + 20, legend_y)
+                c.line(m_center - 17, legend_y, m_center + 17, legend_y)
                 c.line(h_center - 20, legend_y, h_center + 20, legend_y)
 
                 # 화살표 + 라벨: L
@@ -1754,8 +2024,8 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
                 draw_label_box(c, l_center, legend_y, "L")
 
                 # 화살표 + 라벨: M
-                draw_arrow(c, m_center - 23, legend_y, direction="left")
-                draw_arrow(c, m_center + 23, legend_y, direction="right")
+                draw_arrow(c, m_center - 17, legend_y, direction="left")
+                draw_arrow(c, m_center + 17, legend_y, direction="right")
                 draw_label_box(c, m_center, legend_y, "M")
 
                 # 화살표 + 라벨: H
@@ -1763,11 +2033,11 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
                 draw_arrow(c, h_center + 20, legend_y, direction="right")
                 draw_label_box(c, h_center, legend_y, "H")
 
-                # 기준 숫자: 35, 75
+                # 기준 숫자: 35, 65
                 c.setFont("Pretendard-Regular", 6)
                 c.setFillColor(HexColor("#000000"))
                 c.drawCentredString(percent_to_x(35), legend_y-2, "35")
-                c.drawCentredString(percent_to_x(75), legend_y-2, "75")
+                c.drawCentredString(percent_to_x(65), legend_y-2, "65")
 
             # 본문 데이터
             for idx, (group, label, raw, t, per) in enumerate(tci_data):
@@ -1792,7 +2062,7 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
 
                 # 백분위 그래프
                 graph_center = graph_x + col_widths[-1] / 2
-                bar_length = abs(per - 50) * 1.2  # 스케일 조정
+                bar_length = abs(per - 50) * 1.45  # 스케일 조정
                 bar_y = y + 8
                 if per < 50:
                     bar_x = graph_center - bar_length
@@ -1852,13 +2122,8 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
         # 실행
         draw_tci_table()
 
-        c.setFont("Pretendard-Bold", 9)
-        c.setFillColor(HexColor("#535353"))
-        c.drawRightString(width - 60, 40, "굿이너프")
-
-        c.setFont("Pretendard-Regular", 9)
-        c.setFillColor(HexColor("#A9A9A9"))
-        c.drawRightString(width - 47.5, 40, "08")
+        # 페이지 번호
+        makePageNum()
 
 
         c.showPage()
@@ -1895,15 +2160,15 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
 
         # 2. 상단 연두색 텍스트 삽입 박스
         box_x = 60
-        box_y = height - 410
+        box_y = height - 430
         box_width = width - 125
-        box_height = 250
+        box_height = 270
         c.setFillColor(HexColor("#F7FBF5"))
         c.rect(box_x, box_y, box_width, box_height, fill=1, stroke=0)
 
         # 글자 출력 시작 좌표 (요약 박스 아래)
         text_x = 72
-        text_y = height - 190  # 요약 박스보다 살짝 아래
+        text_y = height - 180  # 요약 박스보다 살짝 아래
         text_width = 450
 
         draw_multiline_separateline_text(c, text_x, text_y, summary_text, max_width=text_width)
@@ -1911,12 +2176,12 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
         ### 기질[대인관계 능력]
         # ✅ 설명 박스 배경
         c.setFillColor(HexColor("#D9F1D1"))
-        c.rect(60, height - 460, 470, 24, fill=1, stroke=0)
+        c.rect(60, height - 480, 470, 24, fill=1, stroke=0)
 
         # ✅ 초록 제목 (지표명만 초록)
         c.setFont("Pretendard-Bold", 10)
         c.setFillColor(HexColor("#000000"))
-        c.drawString(60 + 12, height - 450, f"기질 [대인관계 능력]")
+        c.drawString(60 + 12, height - 470, f"기질 [대인관계 능력]")
         summary_text=TCI_scores[3][1][4]
         # summary_text = (
         #     "다른 사람의 감정을 파악할 수 있는 기질적 민감성을 적절히 가지고 있고,\n"
@@ -1928,60 +2193,28 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
 
         # 2. 하단 연두색 텍스트 삽입 박스
         box_x = 60
-        box_y = height - 710
+        box_y = height - 760
         box_width = width - 125
-        box_height = 250
+        box_height = 280
         c.setFillColor(HexColor("#F7FBF5"))
         c.rect(box_x, box_y, box_width, box_height, fill=1, stroke=0)
 
         # 글자 출력 시작 좌표 (요약 박스 아래)
         text_x = 72
-        text_y = height - 490  # 요약 박스보다 살짝 아래
+        text_y = height - 500  # 요약 박스보다 살짝 아래
         text_width = 450
 
         draw_multiline_separateline_text(c, text_x, text_y, summary_text, max_width=text_width)
 
-        c.setFont("Pretendard-Bold", 9)
-        c.setFillColor(HexColor("#535353"))
-        c.drawRightString(width - 60, 40, "굿이너프")
-
-        c.setFont("Pretendard-Regular", 9)
-        c.setFillColor(HexColor("#A9A9A9"))
-        c.drawRightString(width - 47.5, 40, "09")
+        # 페이지 번호
+        makePageNum()
 
 
         c.showPage()
-    ## PAGE 10 - 기질 제언
+    ## PAGE 10 - 기질 제언 1
     def makePage10():
 
         make_back_logo()
-
-        def parse_tci_paragraph(text):
-            # 개행 정리
-            text = text.strip()
-
-            # - 로 시작하는 블록들을 분리
-            blocks = re.split(r'\n(?=- )', text)
-
-            result = []
-
-            for i, block in enumerate(blocks):
-                lines = block.strip().split('\n')
-
-                if lines[0].startswith("- "):
-                    title = lines[0].strip()[2:]  # "- " 제거
-                    content = "\n".join(lines[1:]).strip()
-                else:
-                    title = ""
-                    content = "\n".join(lines).strip()
-
-                if title:
-                    result.append([title])
-                if content:
-                    result[-1].append(content)
-
-            return result
-
 
         # 제목
         c.setFillColor(HexColor("#D3F6B3"))
@@ -1998,68 +2231,131 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
         c.setLineWidth(1)
         c.line(60, height - 110, width - 60, height - 110)
 
+        summary_text1 = parse_paragraph(TCI_scores[4][0][4])
+        summary_text2 = parse_paragraph(TCI_scores[4][1][4])
+
         ### 기질[타고난 특성]
-        # ✅ 설명 박스 배경
+        # ✅ 초록색 제목 배경
         c.setFillColor(HexColor("#D9F1D1"))
         c.rect(60, height - 160, 470, 24, fill=1, stroke=0)
 
-        # ✅ 초록 제목 (지표명만 초록)
+        # ✅ 초록색 제목부분 (지표명만 초록)
         c.setFont("Pretendard-Bold", 10)
         c.setFillColor(HexColor("#000000"))
         c.drawString(60 + 12, height - 150, f"기질 최적화 양육 방법")
 
-        summary_text = parse_tci_paragraph(TCI_scores[4][0][4])
 
-        # 1단 연두색 텍스트 삽입 박스
+        # 회색 배경 글자 출력 시작 좌표 (요약 박스 아래)
+        text_x = 72
+        text_y = height - 180  # 요약 박스보다 살짝 아래
+        text_width = 450
+        # 회색 배경  연두색 텍스트 삽입 박스
         box_x = 60
-        box_y = height - 310
+        box_height = get_line_count(summary_text1[0][1], text_width) + get_line_count(summary_text1[0][0], text_width) + get_line_count(summary_text2[0][1], text_width) + get_line_count(summary_text2[0][0], text_width) - 10
+        box_y = height - 160 - box_height
         box_width = width - 125
-        box_height = 150
-        c.setFillColor(HexColor("#F7FBF5"))
+        c.setFillColor(HexColor("#F8FBF6"))
         c.rect(box_x, box_y, box_width, box_height, fill=1, stroke=0)
 
-        # 글자 출력 시작 좌표 (요약 박스 아래)
-        text_x = 72
-        text_y = height - 190  # 요약 박스보다 살짝 아래
-        text_width = 450
+        draw_multiline_text(c, text_x, text_y, summary_text1[0][0], max_width=text_width, font_name="Pretendard-Bold")
+        draw_multiline_text(c, text_x, text_y - 20, summary_text1[0][1], max_width=text_width, font_name="Pretendard-Regular")
+        draw_multiline_text(c, text_x, text_y - 20 - get_line_count(summary_text1[0][1], text_width), summary_text2[0][0], max_width=text_width, font_name="Pretendard-Bold")
+        draw_multiline_text(c, text_x, text_y - 40 - get_line_count(summary_text1[0][1], text_width), summary_text2[0][1], max_width=text_width, font_name="Pretendard-Regular")
 
+        count=[0,0]
+        for i, j in enumerate(summary_text1):
+            if i==0:
+                box_y -= 30
+                continue
+            elif i<4:
+                count[0]+=1
+                c.setFillColor(HexColor("#3DB419"))
+                c.rect(text_x - 12, box_y, box_width, 20, fill=1, stroke=0)
+                draw_multiline_text(c, text_x, box_y + 8, summary_text1[i][0], max_width=text_width, font_name="Pretendard-Bold", font_color="#FFFFFF")
+                draw_multiline_text(c, text_x, box_y - 15, summary_text1[i][1], max_width=text_width, font_name="Pretendard-Regular")
+                box_y = box_y - get_line_count(summary_text1[i][0], text_width) - get_line_count(summary_text1[i][1], text_width)
 
-        draw_multiline_text(c, text_x, text_y, summary_text[0][0], max_width=text_width, font_name="Pretendard-Bold")
-
-        draw_multiline_text(c, text_x, text_y - 35, summary_text[0][1], max_width=text_width, font_name="Pretendard-Regular")
-
-        for i, j in enumerate(summary_text):
+        for i, j in enumerate(summary_text2):
             if i==0:
                 continue
+            elif count[0]+count[1] < 3:
+                count[1]+=1
+                c.setFillColor(HexColor("#3DB419"))
+                c.rect(text_x - 12, box_y, box_width, 20, fill=1, stroke=0)
+                draw_multiline_text(c, text_x, box_y + 8, summary_text2[i][0], max_width=text_width, font_name="Pretendard-Bold", font_color="#FFFFFF")
+                draw_multiline_text(c, text_x, box_y - 15, summary_text2[i][1], max_width=text_width, font_name="Pretendard-Regular")
+                box_y = box_y - get_line_count(summary_text2[i][0], text_width) - get_line_count(summary_text2[i][1], text_width) + 10
+
+        # 페이지 번호
+        makePageNum()
+
+
+        c.showPage()
+        return count
+
+    ## PAGE 10 - 기질 제언 2
+    def makePage10_2(count):
+
+        make_back_logo()
+
+        # 제목
+        c.setFillColor(HexColor("#D3F6B3"))
+        c.rect(0, height - 15, width, 15, fill=1, stroke=0)
+        c.setFont("Pretendard-Bold", 28)
+        c.setFillColor(HexColor("#000000"))
+        c.drawString(60, height - 90, "기질 및 성격검사")
+        c.setFont("Pretendard-SemiBold", 12)
+        c.setFillColor(HexColor("#555555"))
+        c.drawString(250, height - 90, "Temperament and Character Inventory")
+
+        # ✅ 구분선
+        c.setStrokeColor(HexColor("#DDDDDD"))
+        c.setLineWidth(1)
+        c.line(60, height - 110, width - 60, height - 110)
+
+        summary_text1 = parse_paragraph(TCI_scores[4][0][4])
+        summary_text2 = parse_paragraph(TCI_scores[4][1][4])
+
+        # 회색 배경 글자 출력 시작 좌표 (요약 박스 아래)
+        text_x = 72
+        text_width = 450
+        box_y = height - 160
+        box_width = width - 125
+
+        for i, j in enumerate(summary_text1):
+            if i <= count[0]:
+                continue
             else:
-                draw_multiline_text(c, text_x, text_y - 150 * i, summary_text[i][0], max_width=text_width, font_name="Pretendard-Bold")
-                draw_multiline_text(c, text_x, text_y - 150 * i - 35, summary_text[i][1], max_width=text_width, font_name="Pretendard-Regular")
+                count[0] += 1
+                c.setFillColor(HexColor("#3DB419"))
+                c.rect(text_x - 12, box_y, box_width, 20, fill=1, stroke=0)
+                draw_multiline_text(c, text_x, box_y + 8, summary_text1[i][0], max_width=text_width,
+                                    font_name="Pretendard-Bold", font_color="#FFFFFF")
+                draw_multiline_text(c, text_x, box_y - 15, summary_text1[i][1], max_width=text_width,
+                                    font_name="Pretendard-Regular")
+                box_y = box_y - get_line_count(summary_text1[i][0], text_width) - get_line_count(
+                    summary_text1[i][1], text_width)
 
-        # summary_text=TCI_scores[4][0][4]
-        # summary_text += "\n" + TCI_scores[4][1][4]
-        #
-        #
-        # # 글자 출력 시작 좌표 (요약 박스 아래)
-        # text_x = 72
-        # text_y = height - 190  # 요약 박스보다 살짝 아래
-        # text_width = 450
-        #
-        # draw_multiline_text(c, text_x, text_y, summary_text, max_width=text_width)
+        for i, j in enumerate(summary_text2):
+            if i < count[1]:
+                continue
+            else:
+                c.setFillColor(HexColor("#3DB419"))
+                c.rect(text_x - 12, box_y, box_width, 20, fill=1, stroke=0)
+                draw_multiline_text(c, text_x, box_y + 8, summary_text2[i][0], max_width=text_width,
+                                    font_name="Pretendard-Bold", font_color="#FFFFFF")
+                draw_multiline_text(c, text_x, box_y - 15, summary_text2[i][1], max_width=text_width,
+                                    font_name="Pretendard-Regular")
+                box_y = box_y - get_line_count(summary_text2[i][0], text_width) - get_line_count(
+                    summary_text2[i][1], text_width) + 10
 
-        c.setFont("Pretendard-Bold", 9)
-        c.setFillColor(HexColor("#535353"))
-        c.drawRightString(width - 60, 40, "굿이너프")
-
-        c.setFont("Pretendard-Regular", 9)
-        c.setFillColor(HexColor("#A9A9A9"))
-        c.drawRightString(width - 47.5, 40, "10")
-
+        # 페이지 번호
+        makePageNum()
 
         c.showPage()
     ## PAGE 11  - 성격
     def makePage11():
         make_back_logo()
-
 
         c.setFillColor(HexColor("#D3F6B3"))
         c.rect(0, height - 15, width, 15, fill=1, stroke=0)
@@ -2075,55 +2371,130 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
         c.setLineWidth(1)
         c.line(60, height - 110, width - 60, height - 110)
 
-        ### 기질[타고난 특성]
+        ### 성격
         # ✅ 설명 박스 배경
         c.setFillColor(HexColor("#FEEED4"))
         c.rect(60, height - 160, 470, 24, fill=1, stroke=0)
 
-        # ✅ 초록 제목 (지표명만 초록)
+        # ✅ 주황 제목 (지표명만 주황)
         c.setFont("Pretendard-Bold", 10)
         c.setFillColor(HexColor("#000000"))
         c.drawString(60 + 12, height - 150, f"성격")
 
-        summary_text=TCI_scores[3][2][4]
+        summary_text1 = TCI_scores[3][2][4]
 
         # 글자 출력 시작 좌표 (요약 박스 아래)
         text_x = 72
         text_y = height - 190  # 요약 박스보다 살짝 아래
         text_width = 450
 
-        draw_multiline_text(c, text_x, text_y, summary_text, max_width=text_width)
+        # 상단 주황색 텍스트 삽입 박스
+        box_x = 60
+        box_height = 250
+        box_y = height - 160 - box_height
+        box_width = width - 125
+        c.setFillColor(HexColor("#FFFBF2"))
+        c.rect(box_x, box_y, box_width, box_height, fill=1, stroke=0)
 
+        draw_multiline_separateline_text(c, text_x, text_y, summary_text1, max_width=text_width)
 
-        ### 기질[타고난 특성]
-        # ✅ 설명 박스 배경
-        c.setFillColor(HexColor("#FEEED4"))
-        c.rect(60, height - 360, 470, 24, fill=1, stroke=0)
+        # 페이지 번호
+        makePageNum()
 
-        # ✅ 초록 제목 (지표명만 초록)
-        c.setFont("Pretendard-Bold", 10)
-        c.setFillColor(HexColor("#000000"))
-        c.drawString(60 + 12, height - 350, f"성숙한 성격 발달 방법성격")
+        if lastPage == "TCI-1":
+            # 폰트 및 크기 설정
+            c.setFillColor(HexColor("#000000"))
+            c.setFont("Pretendard-Bold",10)
 
-        summary_text=TCI_scores[4][2][4]
+            text_width = stringWidth(examiner, "Pretendard-Bold", 10)
+            x_position = width - text_width - 20
+            y_position = 20
 
-        # 글자 출력 시작 좌표 (요약 박스 아래)
-        text_x = 72
-        text_y = height - 390  # 요약 박스보다 살짝 아래
-        text_width = 450
+            # 텍스트 그리기
+            c.drawString(x_position, y_position, examiner)
 
-        draw_multiline_text(c, text_x, text_y, summary_text, max_width=text_width)
-
-
-        c.setFont("Pretendard-Bold", 9)
-        c.setFillColor(HexColor("#535353"))
-        c.drawRightString(width - 60, 40, "굿이너프")
-
-        c.setFont("Pretendard-Regular", 9)
-        c.setFillColor(HexColor("#A9A9A9"))
-        c.drawRightString(width - 47.5, 40, "11")
 
         c.showPage()
+##########################
+        ### 성숙한 성격 발달 방법
+    def makePage11_2():
+        make_back_logo()
+
+        # 제목
+        c.setFillColor(HexColor("#D3F6B3"))
+        c.rect(0, height - 15, width, 15, fill=1, stroke=0)
+        c.setFont("Pretendard-Bold", 28)
+        c.setFillColor(HexColor("#000000"))
+        c.drawString(60, height - 90, "기질 및 성격검사")
+        c.setFont("Pretendard-SemiBold", 12)
+        c.setFillColor(HexColor("#555555"))
+        c.drawString(250, height - 90, "Temperament and Character Inventory")
+
+        # ✅ 구분선
+        c.setStrokeColor(HexColor("#DDDDDD"))
+        c.setLineWidth(1)
+        c.line(60, height - 110, width - 60, height - 110)
+
+        summary_text1 = parse_paragraph(TCI_scores[4][2][4])
+
+        ### 성숙한 성격 발달 방법
+        # ✅ 초록색 제목 배경
+        c.setFillColor(HexColor("#FEEED4"))
+        c.rect(60, height - 160, 470, 24, fill=1, stroke=0)
+
+        # ✅ 초록색 제목부분 (지표명만 초록)
+        c.setFont("Pretendard-Bold", 10)
+        c.setFillColor(HexColor("#000000"))
+        c.drawString(60 + 12, height - 150, f"성숙한 성격 발달 방법")
+
+        # 회색 배경 글자 출력 시작 좌표 (요약 박스 아래)
+        text_x = 72
+        text_y = height - 180  # 요약 박스보다 살짝 아래
+        text_width = 450
+        # 회색 배경  연두색 텍스트 삽입 박스
+        box_x = 60
+        box_height = get_line_count(summary_text1[0][1], text_width) + get_line_count(summary_text1[0][0], text_width)
+        box_y = height - 160 - box_height
+        box_width = width - 125
+        c.setFillColor(HexColor("#FFFBF2"))
+        c.rect(box_x, box_y, box_width, box_height, fill=1, stroke=0)
+
+        draw_multiline_text(c, text_x, text_y, summary_text1[0][0], max_width=text_width, font_name="Pretendard-Bold")
+        draw_multiline_text(c, text_x, text_y - 20, summary_text1[0][1], max_width=text_width,
+                            font_name="Pretendard-Regular")
+
+        for i, j in enumerate(summary_text1):
+            if i == 0:
+                box_y -= 30
+                continue
+            else:
+                c.setFillColor(HexColor("#FFBC41"))
+                c.rect(text_x - 12, box_y, box_width, 20, fill=1, stroke=0)
+                draw_multiline_text(c, text_x, box_y + 8, summary_text1[i][0], max_width=text_width,
+                                    font_name="Pretendard-Bold", font_color="#FFFFFF")
+                draw_multiline_text(c, text_x, box_y - 15, summary_text1[i][1], max_width=text_width,
+                                    font_name="Pretendard-Regular")
+                box_y = box_y - get_line_count(summary_text1[i][0], text_width) - get_line_count(summary_text1[i][1],
+                                                                                                 text_width)
+
+        # 페이지 번호
+        makePageNum()
+
+        if lastPage == "TCI-2":
+            # 폰트 및 크기 설정
+            c.setFillColor(HexColor("#000000"))
+            c.setFont("Pretendard-Bold",10)
+
+            text_width = stringWidth(examiner, "Pretendard-Bold", 10)
+            x_position = width - text_width - 20
+            y_position = 20
+
+            # 텍스트 그리기
+            c.drawString(x_position, y_position, examiner)
+
+
+        c.showPage()
+########################
     ## PAGE 12 - 부모양육태도검사 1
     def makePage12():
         make_back_logo()
@@ -2143,207 +2514,95 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
         c.setLineWidth(1)
         c.line(60, height - 110, width - 60, height - 110)
 
-        def draw_parenting_graph(c, x=60, y=150, width=480, height=300):
-            from reportlab.lib.colors import HexColor
 
-            # 항목, 백분위, 결과
-            items = [
-                ("지지표현", 95, "지나침"),
-                ("합리적 설명", 98, "지나침"),
-                ("상취압력", 30, "미흡함"),
-                ("간섭", 40, "이상적임"),
-                ("처벌", 30, "이상적임"),
-                ("감독", 95, "지나침"),
-                ("과잉기대", 20, "이상적임"),
-                ("비일관성", 30, "이상적임")
-            ]
-
-            num_items = len(items)
-            bar_width = width / num_items
-            bar_max_height = height
-            label_font = "Pretendard-Regular"
-            bold_font = "Pretendard-Bold"
-
-            # 배경 그리드
-            for i in range(0, 101, 20):
-                grid_y = y + (i / 100) * bar_max_height
-                c.setStrokeColor(HexColor("#DDDDDD"))
-                c.setLineWidth(1)
-                c.setDash(1, 2)
-                c.line(x, grid_y, x + width, grid_y)
-
-            # ✅ 항목별 이상적인 범위 배경과 점선
-            ideal_ranges = {
-                "지지표현": (65, 85),
-                "합리적 설명": (65, 85),
-                "상취압력": (50, 70),
-                "간섭": (40, 60),
-                "처벌": (30, 50),
-                "감독": (30, 50),
-                "과잉기대": (20, 40),
-                "비일관성": (10, 30)
-            }
-
-            for i, (label, value, result) in enumerate(items):
-                if label not in ideal_ranges:
-                    continue
-                low, high = ideal_ranges[label]
-                bx = x + i * bar_width + bar_width * 0.25
-                bar_x_center = bx + bar_width * 0.5 / 2
-
-                # 이상 범위 배경
-                ideal_bottom = y + (low / 100) * bar_max_height
-                ideal_top = y + (high / 100) * bar_max_height
-                c.setFillColor(HexColor("#FFF3C8"))
-                c.setLineWidth(0.5)
-                c.setDash(1, 0)
-                c.rect(bx-bar_width/4, ideal_bottom, bar_width, ideal_top - ideal_bottom, fill=1, stroke=0)
-
-                # 상한선, 하한선 점선
-                c.setStrokeColor(HexColor("#C9A100"))
-                c.setLineWidth(0.5)
-                c.setDash(1, 2)
-                c.line(bx, ideal_bottom, bx + bar_width * 0.5, ideal_bottom)  # 하한
-                c.line(bx, ideal_top, bx + bar_width * 0.5, ideal_top)        # 상한
-
-
-            # ✅ 각 항목에 세로 점선 추가
-            c.setStrokeColor(HexColor("#CCCCCC"))
-            c.setLineWidth(1)
-            c.setDash(1, 2)
-
-            for i in range(num_items):
-                bx = x + i * bar_width + bar_width * 0.75
-                bar_center_x = bx + bar_width * 0.5 / 2
-                c.line(bar_center_x, y, bar_center_x, y + bar_max_height)
-
-            # 막대 그래프
-            for i, (label, value, result) in enumerate(items):
-                bx = x + i * bar_width + bar_width * 0.25
-                bh = (value / 100) * bar_max_height
-                by = y
-
-                # 막대
-                c.setFillColor(HexColor("#7CC344"))
-                c.rect(bx, by, bar_width * 0.5, bh, fill=1, stroke=0)
-
-            # Y축 기준선 및 백분위 숫자
-            c.setFont(label_font, 7)
-            c.setFillColor(HexColor("#666666"))
-            for i in range(0, 101, 20):
-                label_y = y + (i / 100) * bar_max_height - 3
-                c.drawRightString(x - 5, label_y, str(i))
-
-            # ========================
-            # ✅ 아래쪽 표 추가하기
-            # ========================
-            cell_width = bar_width
-            cell_height = 24
-            table_y = y - 40  # 그래프 아래로 충분히 떨어뜨리기
-
-            header_bg = HexColor("#F0FAEF")
-            ideal_bg = HexColor("#FFF7D9")
-
-            # 상단 제목행
-            c.setFont("Pretendard-Bold", 9)
-            for i, (label, _, _) in enumerate(items):
-                cx = x + i * cell_width
-                c.setFillColor(header_bg)
-                c.rect(cx, table_y, cell_width, cell_height, fill=1, stroke=0)
-                c.setFillColor(HexColor("#000000"))
-                c.drawCentredString(cx + cell_width / 2, table_y + 6, label)
-
-            # 백분위 행
-            for i, (_, value, _) in enumerate(items):
-                cx = x + i * cell_width
-                cy = table_y - cell_height
-                c.setFillColor(HexColor("#FFFFFF"))
-                c.rect(cx, cy, cell_width, cell_height, fill=1, stroke=0)
-                c.setFillColor(HexColor("#000000"))
-                c.setFont("Pretendard-Regular", 9)
-                c.drawCentredString(cx + cell_width / 2, cy + 6, str(value))
-
-            # 결과 행
-            for i, (_, _, result) in enumerate(items):
-                cx = x + i * cell_width
-                cy = table_y - 2 * cell_height
-                if "지나침" in result or "미흡" in result:
-                    text_color = HexColor("#D20000")
-                else:
-                    text_color = HexColor("#000000")
-                bg_color = ideal_bg if "이상적임" in result else HexColor("#FFFFFF")
-
-                c.setFillColor(bg_color)
-                c.rect(cx, cy, cell_width, cell_height, fill=1, stroke=0)
-                c.setFillColor(text_color)
-                c.setFont("Pretendard-Bold", 9)
-                c.drawCentredString(cx + cell_width / 2, cy + 6, result)
-
-            # 왼쪽 열: "백분위", "결과"
-            left_titles = ["백분위", "결과"]
-            c.setFont("Pretendard-Bold", 9)
-            for i, label in enumerate(left_titles):
-                cy = table_y - (i + 1) * cell_height
-                c.setFillColor(HexColor("#DCEAD6"))
-                c.rect(x - 60, cy, 60, cell_height, fill=1, stroke=0)
-                c.setFillColor(HexColor("#000000"))
-                c.drawCentredString(x - 30, cy + 6, label)
-            # ✅ 오른쪽 위 범례 박스 추가
-            legend_x = x + width + 20
-            legend_y = y + height - 10
-            legend_w = 100
-            legend_h = 42
-
-            c.setFillColor(HexColor("#FFFFFF"))
-            c.rect(legend_x, legend_y - legend_h, legend_w, legend_h, fill=1, stroke=0)
-
-            # 색상 사각형 및 텍스트
-            legend_items = [
-                ("#FFF3C8", "이상적인 범위"),
-                ("#7CC344", "자녀보고"),
-                (None, "단위: 백분위(%ile)")
-            ]
-
-            c.setFont("Pretendard-Regular", 7)
-            for i, (color, label) in enumerate(legend_items):
-                lx = legend_x + 60 * i - legend_x / 3
-                if color:
-                    c.setFillColor(HexColor(color))
-                    c.rect(lx + 2, legend_y+20, 8, 8, fill=1, stroke=0)
-                    c.setFillColor(HexColor("#000000"))
-                    c.drawString(lx + 14, legend_y+20, label)
-                else:
-                    c.setFillColor(HexColor("#000000"))
-                    c.drawString(lx - 14, legend_y+20, label)
-
-        draw_parenting_graph(c, x=120, y=500, width=410, height=200)  # 높이 약간 올림
-
+        draw_parenting_graph(c, x=70, y=520, width=470, height=180, items=PAT_graph_score)  # 높이 약간 올림
 
         # ✅ 설명 박스 배경
         c.setFillColor(HexColor("#D9F1D1")) #FEEDD3
-        c.rect(60, height - 470, 470, 24, fill=1, stroke=0)
+        c.rect(60, height - 410, 470, 24, fill=1, stroke=0)
 
         # ✅ 초록 제목 (지표명만 초록)
         c.setFont("Pretendard-Bold", 10)
         c.setFillColor(HexColor("#000000"))
-        c.drawString(60 + 12, height - 460, f"요약 및 제언")
+        c.drawString(60 + 12, height - 402, f"요약 및 제언")
 
+        final_summary=parse_paragraph("".join(PAT_scores['ideal'][1]))
 
-        final_summary = "".join(PAT_scores['ideal'][1])
         # 글자 출력 시작 좌표 (요약 박스 아래)
         text_x = 72
-        text_y = height - 490  # 요약 박스보다 살짝 아래
+        text_y = height - 435  # 요약 박스보다 살짝 아래
         text_width = 450
 
-        draw_multiline_text(c, text_x, text_y, final_summary, max_width=text_width)
+        for i, j in enumerate(final_summary[:3]):
+            draw_multiline_text(c, text_x, text_y + 8, final_summary[i][0], max_width=text_width, font_name="Pretendard-Bold", font_color="#000000")
+            draw_multiline_text(c, text_x, text_y - 15, final_summary[i][1], max_width=text_width, font_name="Pretendard-Regular")
+            text_y = text_y - get_line_count(final_summary[i][0], text_width) - get_line_count(final_summary[i][1], text_width) + 10
 
-        c.setFont("Pretendard-Bold", 9)
-        c.setFillColor(HexColor("#535353"))
-        c.drawRightString(width - 60, 40, "굿이너프")
+        # 페이지 번호
+        makePageNum()
 
-        c.setFont("Pretendard-Regular", 9)
-        c.setFillColor(HexColor("#A9A9A9"))
-        c.drawRightString(width - 47.5, 40, "12")
+        c.showPage()
+
+    ## PAGE 12 - 부모양육태도검사 1-2
+    def makePage12_2():
+        make_back_logo()
+
+        # 제목
+        c.setFillColor(HexColor("#D3F6B3"))
+        c.rect(0, height - 15, width, 15, fill=1, stroke=0)
+        c.setFont("Pretendard-Bold", 28)
+        c.setFillColor(HexColor("#000000"))
+        c.drawString(60, height - 90, "부모 양육태도 검사")
+        c.setFont("Pretendard-SemiBold", 12)
+        c.setFillColor(HexColor("#555555"))
+        c.drawString(280, height - 90, "Parenting Attitude Test - Second Edition")
+
+        # ✅ 구분선
+        c.setStrokeColor(HexColor("#DDDDDD"))
+        c.setLineWidth(1)
+        c.line(60, height - 110, width - 60, height - 110)
+
+        draw_parenting_graph(c, x=70, y=520, width=470, height=180, items=PAT_graph_score)  # 높이 약간 올림
+
+        # ✅ 설명 박스 배경
+        c.setFillColor(HexColor("#D9F1D1"))  # FEEDD3
+        c.rect(60, height - 410, 470, 24, fill=1, stroke=0)
+
+        # ✅ 초록 제목 (지표명만 초록)
+        c.setFont("Pretendard-Bold", 10)
+        c.setFillColor(HexColor("#000000"))
+        c.drawString(60 + 12, height - 402, f"요약 및 제언")
+
+        final_summary = parse_paragraph("".join(PAT_scores['ideal'][1]))
+
+        # 글자 출력 시작 좌표 (요약 박스 아래)
+        text_x = 72
+        text_y = height - 435  # 요약 박스보다 살짝 아래
+        text_width = 450
+
+        for i, j in enumerate(final_summary[3:]):
+            i+=3
+            draw_multiline_text(c, text_x, text_y + 8, final_summary[i][0], max_width=text_width,
+                                font_name="Pretendard-Bold", font_color="#000000")
+            draw_multiline_text(c, text_x, text_y - 15, final_summary[i][1], max_width=text_width,
+                                font_name="Pretendard-Regular")
+            text_y = text_y - get_line_count(final_summary[i][0], text_width) - get_line_count(final_summary[i][1],
+                                                                                               text_width) + 10
+
+        # 페이지 번호
+        makePageNum()
+
+        if lastPage == "PAT-2":
+            # 폰트 및 크기 설정
+            c.setFillColor(HexColor("#000000"))
+            c.setFont("Pretendard-Bold",10)
+
+            text_width = stringWidth(examiner, "Pretendard-Bold", 10)
+            x_position = width - text_width - 20
+            y_position = 20
+
+            # 텍스트 그리기
+            c.drawString(x_position, y_position, examiner)
 
         c.showPage()
     ## PAGE 13 - 부모양육태도검사 2
@@ -2365,217 +2624,260 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
         c.setLineWidth(1)
         c.line(60, height - 110, width - 60, height - 110)
 
-        def draw_parenting_graph(c, x=60, y=150, width=480, height=300):
-            from reportlab.lib.colors import HexColor
 
-            # 항목, 백분위, 결과
-            items = [
-                ("지지표현", 95, "지나침"),
-                ("합리적 설명", 98, "지나침"),
-                ("상취압력", 30, "미흡함"),
-                ("간섭", 40, "이상적임"),
-                ("처벌", 30, "이상적임"),
-                ("감독", 95, "지나침"),
-                ("과잉기대", 20, "이상적임"),
-                ("비일관성", 30, "이상적임")
-            ]
-
-            num_items = len(items)
-            bar_width = width / num_items
-            bar_max_height = height
-            label_font = "Pretendard-Regular"
-            bold_font = "Pretendard-Bold"
-
-            # 배경 그리드
-            for i in range(0, 101, 20):
-                grid_y = y + (i / 100) * bar_max_height
-                c.setStrokeColor(HexColor("#DDDDDD"))
-                c.setLineWidth(1)
-                c.setDash(1, 2)
-                c.line(x, grid_y, x + width, grid_y)
-
-            # ✅ 항목별 이상적인 범위 배경과 점선
-            ideal_ranges = {
-                "지지표현": (65, 85),
-                "합리적 설명": (65, 85),
-                "상취압력": (50, 70),
-                "간섭": (40, 60),
-                "처벌": (30, 50),
-                "감독": (30, 50),
-                "과잉기대": (20, 40),
-                "비일관성": (10, 30)
-            }
-
-            for i, (label, value, result) in enumerate(items):
-                if label not in ideal_ranges:
-                    continue
-                low, high = ideal_ranges[label]
-                bx = x + i * bar_width + bar_width * 0.25
-                bar_x_center = bx + bar_width * 0.5 / 2
-
-                # 이상 범위 배경
-                ideal_bottom = y + (low / 100) * bar_max_height
-                ideal_top = y + (high / 100) * bar_max_height
-                c.setFillColor(HexColor("#FFF3C8"))
-                c.setLineWidth(0.5)
-                c.setDash(1, 0)
-                c.rect(bx-bar_width/4, ideal_bottom, bar_width, ideal_top - ideal_bottom, fill=1, stroke=0)
-
-                # 상한선, 하한선 점선
-                c.setStrokeColor(HexColor("#C9A100"))
-                c.setLineWidth(0.5)
-                c.setDash(1, 2)
-                c.line(bx, ideal_bottom, bx + bar_width * 0.5, ideal_bottom)  # 하한
-                c.line(bx, ideal_top, bx + bar_width * 0.5, ideal_top)        # 상한
-
-
-            # ✅ 각 항목에 세로 점선 추가
-            c.setStrokeColor(HexColor("#CCCCCC"))
-            c.setLineWidth(1)
-            c.setDash(1, 2)
-
-            for i in range(num_items):
-                bx = x + i * bar_width + bar_width * 0.75
-                bar_center_x = bx + bar_width * 0.5 / 2
-                c.line(bar_center_x, y, bar_center_x, y + bar_max_height)
-
-            # 막대 그래프
-            for i, (label, value, result) in enumerate(items):
-                bx = x + i * bar_width + bar_width * 0.25
-                bh = (value / 100) * bar_max_height
-                by = y
-
-                # 막대
-                c.setFillColor(HexColor("#7CC344"))
-                c.rect(bx, by, bar_width * 0.5, bh, fill=1, stroke=0)
-
-            # Y축 기준선 및 백분위 숫자
-            c.setFont(label_font, 7)
-            c.setFillColor(HexColor("#666666"))
-            for i in range(0, 101, 20):
-                label_y = y + (i / 100) * bar_max_height - 3
-                c.drawRightString(x - 5, label_y, str(i))
-
-            # ========================
-            # ✅ 아래쪽 표 추가하기
-            # ========================
-            cell_width = bar_width
-            cell_height = 24
-            table_y = y - 40  # 그래프 아래로 충분히 떨어뜨리기
-
-            header_bg = HexColor("#F0FAEF")
-            ideal_bg = HexColor("#FFF7D9")
-
-            # 상단 제목행
-            c.setFont("Pretendard-Bold", 9)
-            for i, (label, _, _) in enumerate(items):
-                cx = x + i * cell_width
-                c.setFillColor(header_bg)
-                c.rect(cx, table_y, cell_width, cell_height, fill=1, stroke=0)
-                c.setFillColor(HexColor("#000000"))
-                c.drawCentredString(cx + cell_width / 2, table_y + 6, label)
-
-            # 백분위 행
-            for i, (_, value, _) in enumerate(items):
-                cx = x + i * cell_width
-                cy = table_y - cell_height
-                c.setFillColor(HexColor("#FFFFFF"))
-                c.rect(cx, cy, cell_width, cell_height, fill=1, stroke=0)
-                c.setFillColor(HexColor("#000000"))
-                c.setFont("Pretendard-Regular", 9)
-                c.drawCentredString(cx + cell_width / 2, cy + 6, str(value))
-
-            # 결과 행
-            for i, (_, _, result) in enumerate(items):
-                cx = x + i * cell_width
-                cy = table_y - 2 * cell_height
-                if "지나침" in result or "미흡" in result:
-                    text_color = HexColor("#D20000")
-                else:
-                    text_color = HexColor("#000000")
-                bg_color = ideal_bg if "이상적임" in result else HexColor("#FFFFFF")
-
-                c.setFillColor(bg_color)
-                c.rect(cx, cy, cell_width, cell_height, fill=1, stroke=0)
-                c.setFillColor(text_color)
-                c.setFont("Pretendard-Bold", 9)
-                c.drawCentredString(cx + cell_width / 2, cy + 6, result)
-
-            # 왼쪽 열: "백분위", "결과"
-            left_titles = ["백분위", "결과"]
-            c.setFont("Pretendard-Bold", 9)
-            for i, label in enumerate(left_titles):
-                cy = table_y - (i + 1) * cell_height
-                c.setFillColor(HexColor("#DCEAD6"))
-                c.rect(x - 60, cy, 60, cell_height, fill=1, stroke=0)
-                c.setFillColor(HexColor("#000000"))
-                c.drawCentredString(x - 30, cy + 6, label)
-            # ✅ 오른쪽 위 범례 박스 추가
-            legend_x = x + width + 20
-            legend_y = y + height - 10
-            legend_w = 100
-            legend_h = 42
-
-            c.setFillColor(HexColor("#FFFFFF"))
-            c.rect(legend_x, legend_y - legend_h, legend_w, legend_h, fill=1, stroke=0)
-
-            # 색상 사각형 및 텍스트
-            legend_items = [
-                ("#FFF3C8", "이상적인 범위"),
-                ("#7CC344", "자녀보고"),
-                (None, "단위: 백분위(%ile)")
-            ]
-
-            c.setFont("Pretendard-Regular", 7)
-            for i, (color, label) in enumerate(legend_items):
-                lx = legend_x + 60 * i - legend_x / 3
-                if color:
-                    c.setFillColor(HexColor(color))
-                    c.rect(lx + 2, legend_y+20, 8, 8, fill=1, stroke=0)
-                    c.setFillColor(HexColor("#000000"))
-                    c.drawString(lx + 14, legend_y+20, label)
-                else:
-                    c.setFillColor(HexColor("#000000"))
-                    c.drawString(lx - 14, legend_y+20, label)
-
-        draw_parenting_graph(c, x=120, y=500, width=410, height=200)  # 높이 약간 올림
+        draw_parenting_graph(c, x=70, y=520, width=470, height=180, items=PAT_graph_score)  # 높이 약간 올림
 
 
         # ✅ 설명 박스 배경
         c.setFillColor(HexColor("#FEEDD3")) #FEEDD3
-        c.rect(60, height - 470, 470, 24, fill=1, stroke=0)
+        c.rect(60, height - 410, 470, 24, fill=1, stroke=0)
+
+        # ✅ 주황 제목 (지표명만 초록)
+        c.setFont("Pretendard-Bold", 10)
+        c.setFillColor(HexColor("#000000"))
+        c.drawString(60 + 12, height - 402, f"요약 및 제언")
+
+
+        final_summary=parse_paragraph("".join(PAT_scores['ideal'][3]))
+
+        # 글자 출력 시작 좌표 (요약 박스 아래)
+        text_x = 72
+        text_y = height - 435  # 요약 박스보다 살짝 아래
+        text_width = 450
+
+        for i, j in enumerate(final_summary[:3]):
+            draw_multiline_text(c, text_x, text_y + 8, final_summary[i][0], max_width=text_width, font_name="Pretendard-Bold", font_color="#000000")
+            draw_multiline_text(c, text_x, text_y - 15, final_summary[i][1], max_width=text_width, font_name="Pretendard-Regular")
+            text_y = text_y - get_line_count(final_summary[i][0], text_width) - get_line_count(final_summary[i][1], text_width) + 10
+
+        # 페이지 번호
+        makePageNum()
+
+        if lastPage == "PAT-3":
+            # 폰트 및 크기 설정
+            c.setFillColor(HexColor("#000000"))
+            c.setFont("Pretendard-Bold",10)
+
+            text_width = stringWidth(examiner, "Pretendard-Bold", 10)
+            x_position = width - text_width - 20
+            y_position = 20
+
+            # 텍스트 그리기
+            c.drawString(x_position, y_position, examiner)
+
+        c.showPage()
+
+    ## PAGE 13 - 부모양육태도검사 2
+    def makePage13_2():
+        make_back_logo()
+
+        # 제목
+        c.setFillColor(HexColor("#D3F6B3"))
+        c.rect(0, height - 15, width, 15, fill=1, stroke=0)
+        c.setFont("Pretendard-Bold", 28)
+        c.setFillColor(HexColor("#000000"))
+        c.drawString(60, height - 90, "부모 양육태도 검사")
+        c.setFont("Pretendard-SemiBold", 12)
+        c.setFillColor(HexColor("#555555"))
+        c.drawString(280, height - 90, "Parenting Attitude Test - Second Edition")
+
+        # ✅ 구분선
+        c.setStrokeColor(HexColor("#DDDDDD"))
+        c.setLineWidth(1)
+        c.line(60, height - 110, width - 60, height - 110)
+
+        draw_parenting_graph(c, x=70, y=520, width=470, height=180, items=PAT_graph_score)  # 높이 약간 올림
+
+        # ✅ 설명 박스 배경
+        c.setFillColor(HexColor("#FEEDD3"))  # FEEDD3
+        c.rect(60, height - 410, 470, 24, fill=1, stroke=0)
+
+        # ✅ 주황 제목 (지표명만 초록)
+        c.setFont("Pretendard-Bold", 10)
+        c.setFillColor(HexColor("#000000"))
+        c.drawString(60 + 12, height - 402, f"요약 및 제언")
+
+        final_summary = parse_paragraph("".join(PAT_scores['ideal'][3]))
+
+        # 글자 출력 시작 좌표 (요약 박스 아래)
+        text_x = 72
+        text_y = height - 435  # 요약 박스보다 살짝 아래
+        text_width = 450
+
+        for i, j in enumerate(final_summary[3:]):
+            i+=3
+            draw_multiline_text(c, text_x, text_y + 8, final_summary[i][0], max_width=text_width,
+                                font_name="Pretendard-Bold", font_color="#000000")
+            draw_multiline_text(c, text_x, text_y - 15, final_summary[i][1], max_width=text_width,
+                                font_name="Pretendard-Regular")
+            text_y = text_y - get_line_count(final_summary[i][0], text_width) - get_line_count(final_summary[i][1],
+                                                                                               text_width) + 10
+
+        # 페이지 번호
+        makePageNum()
+
+        if lastPage == "PAT-4":
+            # 폰트 및 크기 설정
+            c.setFillColor(HexColor("#000000"))
+            c.setFont("Pretendard-Bold",10)
+
+            text_width = stringWidth(examiner, "Pretendard-Bold", 10)
+            x_position = width - text_width - 20
+            y_position = 20
+
+            # 텍스트 그리기
+            c.drawString(x_position, y_position, examiner)
+
+        c.showPage()
+
+    def makePage_custom_text(title, subtitle, summary_title, summary_content, lastPage):
+        # 기존 makePage_custom 함수와 동일
+        # 이 함수는 텍스트만 있는 페이지를 만듭니다.
+
+        ## PAGE 07 지능검사 요약 및 제언
+        make_back_logo()
+
+        # 제목
+        c.setFillColor(HexColor("#D3F6B3"))
+        c.rect(0, height - 15, width, 15, fill=1, stroke=0)
+        c.setFont("Pretendard-Bold", 28)
+        c.setFillColor(HexColor("#000000"))
+        c.drawString(60, height - 90, title)
+
+        text_width = stringWidth(title, "Pretendard-Bold", 28)
+
+        c.setFont("Pretendard-SemiBold", 12)
+        c.setFillColor(HexColor("#555555"))
+        c.drawString(60 + text_width + 15, height - 90, subtitle)
+
+        # ✅ 구분선
+        c.setStrokeColor(HexColor("#DDDDDD"))
+        c.setLineWidth(1)
+        c.line(60, height - 110, width - 60, height - 110)
+
+        # ✅ 설명 박스 배경
+        c.setFillColor(HexColor("#D9F1D1"))
+        c.rect(60, height - 160, 470, 24, fill=1, stroke=0)
 
         # ✅ 초록 제목 (지표명만 초록)
         c.setFont("Pretendard-Bold", 10)
         c.setFillColor(HexColor("#000000"))
-        c.drawString(60 + 12, height - 460, f"요약 및 제언")
+        c.drawString(60 + 12, height - 150, summary_title)
+
+        # 2. 상단 연두색 텍스트 박스
+        box_x = 60
+        box_y = height - 610
+        box_width = width - 125
+        box_height = 450
+        c.setFillColor(HexColor("#F7FBF5"))
+        c.rect(box_x, box_y, box_width, box_height, fill=1, stroke=0)
 
 
-        final_summary = "".join(PAT_scores['ideal'][3])
         # 글자 출력 시작 좌표 (요약 박스 아래)
         text_x = 72
-        text_y = height - 490  # 요약 박스보다 살짝 아래
+        text_y = height - 190  # 요약 박스보다 살짝 아래
         text_width = 450
 
-        draw_multiline_text(c, text_x, text_y, final_summary, max_width=text_width)
+        draw_multiline_text(c, text_x, text_y, summary_content, max_width=text_width)
 
-        c.setFont("Pretendard-Bold", 9)
-        c.setFillColor(HexColor("#535353"))
-        c.drawRightString(width - 60, 40, "굿이너프")
+
+        # 페이지 번호
+        makePageNum()
+
+        if lastPage == "CUST":
+            # 폰트 및 크기 설정
+            c.setFillColor(HexColor("#000000"))
+            c.setFont("Pretendard-Bold",10)
+
+            text_width = stringWidth(examiner, "Pretendard-Bold", 10)
+            x_position = width - text_width - 20
+            y_position = 20
+
+            # 텍스트 그리기
+            c.drawString(x_position, y_position, examiner)
+
+        c.showPage()
+    def makePage_custom_image(title, subtitle, image_path, summary_title, summary_content, lastPage):
+        # 그림 포함 페이지 생성 함수
+        # 페이지 번호
+        makePageNum()
+
+        c.setFillColor(HexColor("#D3F6B3"))
+        c.rect(0, height - 15, width, 15, fill=1, stroke=0)
+        c.setFont("Pretendard-Bold", 28)
+        c.setFillColor(HexColor("#000000"))
+        c.drawString(60, height - 90, title)
+
+        text_width = stringWidth(title, "Pretendard-Bold", 28)
+
+        c.setFont("Pretendard-SemiBold", 12)
+        c.setFillColor(HexColor("#555555"))
+        c.drawString(60 + text_width + 15, height - 90, subtitle)
+
+        # ✅ 구분선
+        c.setStrokeColor(HexColor("#DDDDDD"))
+        c.setLineWidth(1)
+        c.line(60, height - 110, width - 60, height - 110)
+
+        # ✅ 이미지 삽입
+        if image_path:
+            img = ImageReader(image_path)
+            img_width, img_height = img.getSize()
+            # 이미지 크기 비율 유지하며 너비에 맞춰 조정
+            aspect = img_height / img_width
+            draw_width = 450
+            draw_height = draw_width * aspect
+            # 이미지를 페이지 중앙에 위치
+            img_x = (width - draw_width) / 2
+            img_y = height - 130 - draw_height  # 제목과 부제목 아래에 위치
+            c.drawImage(img, img_x, img_y, width=draw_width, height=draw_height)
+
+        # ✅ 본문 박스 위치는 이미지 아래에 오도록 조정
+        box_y_start = img_y - 35
+
+        # ✅ 설명 박스 배경
+        c.setFillColor(HexColor("#D9F1D1"))
+        c.rect(60, box_y_start - 10, 470, 24, fill=1, stroke=0)
+
+        # ✅ 초록 제목 (지표명만 초록)
+        c.setFont("Pretendard-Bold", 10)
+        c.setFillColor(HexColor("#000000"))
+        c.drawString(72, box_y_start, summary_title)
+
+        # 2. 하단 연두색 텍스트 박스
+        box_x = 60
+        box_y = height - 770
+        box_width = width - 125
+        box_height = box_y_start - 10 - box_y
+        c.setFillColor(HexColor("#F7FBF5"))
+        c.rect(box_x, box_y, box_width, box_height, fill=1, stroke=0)
 
         c.setFont("Pretendard-Regular", 9)
-        c.setFillColor(HexColor("#A9A9A9"))
-        c.drawRightString(width - 47.5, 40, "13")
+        text_width = 440
+        draw_multiline_text(c, 72, box_y_start-25, summary_content, max_width=text_width)
+
+        if lastPage == "CUST":
+            # 폰트 및 크기 설정
+            c.setFillColor(HexColor("#000000"))
+            c.setFont("Pretendard-Bold",10)
+
+            text_width = stringWidth(examiner, "Pretendard-Bold", 10)
+            x_position = width - text_width - 20
+            y_position = 20
+
+            # 텍스트 그리기
+            c.drawString(x_position, y_position, examiner)
 
         c.showPage()
 
-
+    lastPage=""
     makePage00()
     makePage01()
     makePage02()
     makePage03(manual_info)
-
     if INT_fileflag == 1:
+        if TCI_fileflag == 0 and PAT_fileflag == 0 and custom_pages == []:
+            lastPage="INT"
         makePage04(fsiq=fsiq, percentile=percentile, strength_label=strength_label, strength_score=strength_score,
                    weakness_label=weakness_label,
                    weakness_score=weakness_score, sub_scores=sub_scores, ci_min=ci_min, ci_max=ci_max)
@@ -2583,15 +2885,39 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
         makePage06()
         makePage07()
 
+
+
     if TCI_fileflag == 1:
+        if PAT_fileflag == 0 and custom_pages == []:
+            lastPage="TCI-1"
         makePage08()
         makePage09()
-        makePage10()
-        makePage11()
+        count = makePage10()
+        if len(parse_paragraph(TCI_scores[4][0][4]))+ len(parse_paragraph(TCI_scores[4][1][4])) > 5:
+            makePage10_2(count)
+        if (("".join(TCI_scores[4][2][4].split())) == ""):
+            makePage11()
+        if (("".join(TCI_scores[4][2][4].split()))!="") and lastPage=="TCI-1":
+            lastPage = "TCI-2"
+            makePage11_2()
 
     if PAT_fileflag == 1:
-        makePage12()
-        makePage13()
+        if custom_pages == []:
+            lastPage="PAT-1"
+        if len(parse_paragraph("".join(PAT_scores['ideal'][1]))) > 0:
+            makePage12()
+            if len(parse_paragraph("".join(PAT_scores['ideal'][1]))) > 3:
+                if len(parse_paragraph("".join(PAT_scores['ideal'][3]))) == 0 and lastPage=="PAT-1":
+                    lastPage = "PAT-2"
+                makePage12_2()
+        if len(parse_paragraph("".join(PAT_scores['ideal'][3]))) > 0:
+            if len(parse_paragraph("".join(PAT_scores['ideal'][3]))) <= 3 and lastPage=="PAT-1":
+                lastPage = "PAT-3"
+            makePage13()
+            if len(parse_paragraph("".join(PAT_scores['ideal'][3]))) > 3:
+                if lastPage=="PAT-1":
+                    lastPage = "PAT-4"
+                makePage13_2()
 
 
     ################################
@@ -2603,6 +2929,29 @@ def generate_full_pdf(manual_info=None, output_path=None, input_pdf_paths=None, 
 
     ################################
 
+    # ✅ 사용자 정의 페이지 생성
+    if custom_pages:
+        for i, page_data in enumerate(custom_pages):
+            if i == len(custom_pages) - 1:
+                # 마지막 페이지인 경우 summary_title을 변경합니다.
+                lastPage = "CUST"
+            if page_data["page_type"] == "텍스트 전용 페이지":
+                makePage_custom_text(
+                    page_data["title"],
+                    page_data["subtitle"],
+                    page_data["summary_title"],
+                    page_data["summary_content"],
+                    lastPage
+                )
+            elif page_data["page_type"] == "그림 포함 페이지":
+                makePage_custom_image(
+                    page_data["title"],
+                    page_data["subtitle"],
+                    page_data["image_path"],
+                    page_data["summary_title"],
+                    page_data["summary_content"],
+                    lastPage
+                )
 
     c.save()
     print(f"📄 전체 PDF 생성 완료: {output_path}")
