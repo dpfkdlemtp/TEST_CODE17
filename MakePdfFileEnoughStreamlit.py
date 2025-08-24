@@ -22,10 +22,8 @@ def get_drive_service():
     creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
     return build('drive', 'v3', credentials=creds)
 
-@st.cache_data(ttl=3000, show_spinner=False)
-def load_password_from_drive():
+def load_password_from_drive(file_id):
     service = get_drive_service()
-    file_id = "1GRb3MVsb4TcaveVlGFZgCEPqmg5TBww6"  # 패스워드 JSON 파일 ID
     request = service.files().get_media(fileId=file_id)
     fh = io.BytesIO()
     downloader = MediaIoBaseDownload(fh, request)
@@ -34,27 +32,27 @@ def load_password_from_drive():
         status, done = downloader.next_chunk()
     fh.seek(0)
     return json.load(fh)
-    
+
 st.set_page_config(page_title="굿이너프 보고서 생성기", layout="centered")
 
-# 비밀번호 인증 세션 상태
+
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if "password_attempted" not in st.session_state:
-    st.session_state.password_attempted = ""  # 최근 입력한 값
+    st.session_state.password_attempted = ""  
 
-# 인증되지 않았을 경우
+
 if not st.session_state.authenticated:
     st.title("🔒 접근 제한")
 
-    with st.form("password_form", clear_on_submit=True):  # ✅ 입력창 자동 초기화
+    with st.form("password_form", clear_on_submit=True):  
         password_input = st.text_input("접근 비밀번호를 입력하세요", type="password", value="")
-        submitted = st.form_submit_button("확인")  # ✅ Enter도 인식됨
+        submitted = st.form_submit_button("확인")  
 
     if submitted:
         try:
-            password_json = load_password_from_drive()
+            password_json = load_password_from_drive("1GRb3MVsb4TcaveVlGFZgCEPqmg5TBww6")
             correct_password = password_json.get("password", "")
 
             if password_input == correct_password:
@@ -69,13 +67,16 @@ if not st.session_state.authenticated:
     st.stop()
 
 
-# 세션 키 초기화
 if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
 if "temp_paths" not in st.session_state:
     st.session_state.temp_paths = []
+    
+examiner = load_temperament_dict_from_drive("1n6VEjr0QBMOdmT-TG_VjP3VL3dxUS75o")
+title = load_temperament_dict_from_drive("1h_jT9f5IJA4GVmG12ffzhrlaQNeSknmg")
 
-# 1) 파일명 유효성 검사 함수
+
+
 def is_valid_filename(fname: str) -> tuple[bool, str]:
     """
     규칙:
@@ -96,7 +97,8 @@ def is_valid_filename(fname: str) -> tuple[bool, str]:
     return True, ""
 
 print("=================================start==============================")
-st.title("📄 굿이너프 보고서 생성기")
+st.set_page_config(page_title=f"{title} 보고서 생성기", layout="centered")
+st.title(f"📄 {title} 보고서 생성기")
 
 
 score_category ={
@@ -110,7 +112,7 @@ score_category ={
     "처리속도" : "PSI"
 }
 
-# 1. 파일 업로드 영역
+
 uploaded_files = st.file_uploader(
     "📂 피검사자 PDF 업로드",
     type="pdf",
@@ -118,16 +120,16 @@ uploaded_files = st.file_uploader(
     key="pdf_uploader"
 )
 
-# 2. 업로드 확인
+
 if not uploaded_files:
     st.info("👆 먼저 피검사자 PDF 파일을 업로드해주세요.")
     st.stop()
 
-# ✅ 업로드된 파일들 파일명 규칙 검사
+
 valid_uploaded = []
 invalid_reports = []
 for f in uploaded_files:
-    ok, reason = is_valid_filename(f.name)  # 이미 상단에 정의된 함수 사용
+    ok, reason = is_valid_filename(f.name)  
     if ok:
         valid_uploaded.append(f)
     else:
@@ -136,30 +138,30 @@ for f in uploaded_files:
 if invalid_reports:
     st.error("다음 파일은 파일명 규칙을 만족하지 않아 제외됩니다:\n\n" + "\n".join(invalid_reports))
 
-# ✅ 유효 파일이 하나도 없으면 중단
+
 if not valid_uploaded:
     st.info("규칙에 맞는 파일이 없습니다. 파일명을 확인한 뒤 다시 업로드해 주세요.")
     st.stop()
 
-# 3. 임시 파일로 저장
-# 임시 저장 경로와 함께 원래 파일명도 저장
+
+
 temp_files = []
-st.session_state.temp_paths = []  # 매 업로드 때 새로 채움
+st.session_state.temp_paths = []  
 
 
-for f in valid_uploaded:  # ← 여기만 교체!
+for f in valid_uploaded:  
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     tmp.write(f.read())
     tmp.flush()
     temp_files.append({"path": tmp.name, "original_name": f.name})
-    st.session_state.temp_paths.append(tmp.name)  # ← 추가
+    st.session_state.temp_paths.append(tmp.name)  
 
 
 def generate_summary_text(score_data, score_category):
     index_scores = score_data["지표점수"]
     subtest_scores = score_data["소검사점수"]
 
-    # 도메인별 하위검사 분류하기
+    
     domain_map = {}
     for k in subtest_scores:
         if "_" not in k:
@@ -167,19 +169,19 @@ def generate_summary_text(score_data, score_category):
         domain, subtest = k.split("_", 1)
         domain_map.setdefault(domain, []).append(subtest)
 
-    # 도메인 순서 정렬 (전체지능 먼저, 이후 점수순 정렬)
+    
     domain_order = list(score_category.keys())
-    domain_order = [d for d in domain_order if d in index_scores]  # 점수 있는 도메인만
+    domain_order = [d for d in domain_order if d in index_scores]  
     if "전체IQ" in domain_order:
         domain_order.remove("전체IQ")
     if "전체 지능" in domain_order:
         domain_order.remove("전체 지능")
     domain_order = ["전체IQ"] + domain_order
     domain_title_desc = {}
-    # 요약문 문장 구성
+    
     for domain in domain_order:
         if domain not in index_scores or domain not in domain_map:
-            continue  # 소검사가 없는 도메인은 건너뜀
+            continue  
         desc_lines = []
 
         code = score_category.get(domain, "")
@@ -191,7 +193,7 @@ def generate_summary_text(score_data, score_category):
             full_key = f"{domain}_{subtest}"
             if full_key in subtest_scores:
                 sub_score = subtest_scores[full_key]
-                # 점수 기반 진단분류 대략 추정 (옵션)
+                
                 try:
                     s = int(sub_score)
                     if s >= 15:
@@ -235,49 +237,135 @@ def generate_summary_text(score_data, score_category):
 
     return domain_title_desc
 
+def add_bullet(points: list[str]) -> str:
+    """
+    리스트의 각 항목 첫 줄 맨 앞에 '- ' 붙이고,
+    전체를 줄바꿈으로 연결된 문자열로 반환
+    """
+    modified = []
+    for item in points:
+        lines = item.split("\n", 1)  
+        first_line = "- " + lines[0].strip()  
+        if len(lines) > 1:
+            modified_item = "\n" + first_line + "\n" + lines[1]
+        else:
+            modified_item = first_line
+        modified.append(modified_item.strip())
+    return "\n".join(modified)
 
 
-# 5. 검사자 정보 추출
+
 merged_info, warn_msgs = merge_examiner_info_from_files(temp_files)
 
-# 파일 존재 여부 플래그 (값 없으면 0, 있으면 1)
+
 INT_fileflag = 0
 TCI_fileflag = 0
 PAT_fileflag = 0
 
 
-# ✅ scores 먼저 추출 (요약문 생성에 필요)
+
 for file in temp_files:
     if ("wais" in file["original_name"].lower()) or ("wisc" in file["original_name"].lower()) or ("wppsi" in file["original_name"].lower()):
         INT_scores, INT_filename = INT_extract_all_scores(file["path"], original_name=file["original_name"])
         INT_fileflag = 1
+        IntelligenceDomain = generate_summary_text(INT_scores, score_category)
+        default_summary = {}
+        for i in IntelligenceDomain.keys():
+            default_summary[i] = IntelligenceDomain[i][4]
+
     elif "tci" in file["original_name"].lower():
         TCI_scores, TCI_filename = TCI_extract_all_scores(file["path"], original_name=file["original_name"])
         TCI_fileflag = 1
+
     elif "pat" in file["original_name"].lower():
         PAT_scores, PAT_filename = PAT_extract_all_scores(file["path"], original_name=file["original_name"])
         PAT_fileflag = 1
+        
+        PAT_scores['ideal'][1] = add_bullet(PAT_scores['ideal'][1])
+        PAT_scores['ideal'][3] = add_bullet(PAT_scores['ideal'][3])
 
-# 지능검사 INT
-if INT_fileflag == 1:
-    IntelligenceDomain = generate_summary_text(INT_scores, score_category)
-    default_summary = {}
-    for i in IntelligenceDomain.keys():
-        default_summary[i]=IntelligenceDomain[i][4]
 
 
 st.subheader("🙋‍♂️ 개발자 공지")
-기질1 = st.text_area(
+st.text_area(
     "",
     height=250,
-    value="★파일을 업로드할 때는 항상 새로고침 후 업로드★\n"
-          "20250813 수정 일부 반영"
+    value="0. 파일을 업로드할 때는 항상 초기화 실행 후 업로드"
+          "1. 현재 지능검사 WAIS의 경우 진단 분류 기준 확인 불가로 잘못 기재될 수 있음"
 )
 
-# 6. 수정 가능한 검사자 정보 입력 폼
-st.subheader("📝 피검사자 정보")
+
+if "custom_pages" not in st.session_state:
+    st.session_state.custom_pages = []
+
+st.header("사용자 정의 PDF 페이지 생성")
+st.write("아래 버튼을 눌러 원하는 만큼 페이지를 추가하고 내용을 입력해주세요.")
+
+if st.button("새 페이지 추가"):
+    st.session_state.custom_pages.append({
+        "page_type": "텍스트 전용",
+        "title": "",
+        "subtitle": "",
+        "summary_title": "",
+        "summary_content": "",
+        "image_path": None
+    })
+    st.rerun()
+
+for i, page_data in enumerate(st.session_state.custom_pages):
+
+    
+    col1, col2, col3 = st.columns([5, 3, 10])
+    with col1:
+        st.subheader(f"추가 페이지 {i + 1}")
+    with col2:
+        if st.button("삭제", key=f"delete_{i}"):
+            st.session_state.custom_pages.pop(i)
+            st.rerun()
+    with col3:
+        st.markdown("")  
+
+    
+    page_data["page_type"] = st.radio(
+        "페이지 유형을 선택하세요:",
+        ["텍스트 전용 페이지", "그림 포함 페이지"],
+        key=f"page_type_{i}",
+        horizontal=True,
+        index=0 if page_data["page_type"] == "텍스트 전용 페이지" else 1
+    )
+
+    page_data["title"] = st.text_input("제목 (예: 웩슬러 지능검사)", value=page_data["title"], key=f"title_{i}")
+    page_data["subtitle"] = st.text_input("부제목 (예: Korean ~~)", value=page_data["subtitle"], key=f"subtitle_{i}")
+
+    
+    if page_data["page_type"] == "그림 포함 페이지":
+        uploaded_image = st.file_uploader("그림 파일을 업로드해주세요 (JPG, PNG)", type=["jpg", "jpeg", "png"],
+                                          key=f"image_uploader_{i}")
+        if uploaded_image:
+            import tempfile, os
+
+            temp_dir = tempfile.gettempdir()
+            image_path = os.path.join(temp_dir, uploaded_image.name)
+            with open(image_path, "wb") as f:
+                f.write(uploaded_image.getbuffer())
+            page_data["image_path"] = image_path
+        else:
+            page_data["image_path"] = None
+
+    page_data["summary_title"] = st.text_input("본문 명칭 (예: 요약 및 제언)", value=page_data["summary_title"],
+                                               key=f"sum_title_{i}")
+    page_data["summary_content"] = st.text_area("본문 내용", value=page_data["summary_content"], key=f"sum_content_{i}")
+
+    st.markdown("---")
+
+
+
 
 with st.form("examiner_info_form"):
+    st.subheader("👨‍⚕️ 검사자 정보")
+    examiner = st.text_input("검사자", examiner)
+
+    st.subheader("🙍‍♂️ 피검사자 정보")
     name = st.text_input("이름(성별,나이)", merged_info["이름"])
     birth = st.text_input("생년월일", merged_info["생년월일"])
     exam_date = st.text_input("검사일자", merged_info["검사일자"])
@@ -290,9 +378,9 @@ with st.form("examiner_info_form"):
 
         st.subheader("🧠 지능검사 (자동생성)")
         for i in default_summary.keys():
-            default_summary[i] = st.text_area(f"📝 {i} 요약", default_summary[i], height=120)
+            default_summary[i] = st.text_area(f"{i} 요약", default_summary[i], height=120)
 
-        # 최종 요약 및 제언
+        
         final_summary = st.text_area(
             "지능검사 최종 요약 및 제언",
             height=250,
@@ -300,19 +388,59 @@ with st.form("examiner_info_form"):
         )
 
     if TCI_fileflag == 1:
-        # 최종 요약 및 제언
+        
         st.subheader("🤓 기질 및 성격 검사 (자동 생성)")
         기질1 = st.text_area(
-            "기질 1 (줄바꿈 2번하는 경우 선으로 구분)",
+            "기질 1 (줄바꿈 2번 -> 선)",
             height=250,
             placeholder="예: 전반적으로 우수한 지능을 보이며, 특히 언어이해 영역에서 높은 수행을 보였습니다. ...",
             value=TCI_scores[3][0][4]
         )
         기질2 = st.text_area(
-            "기질 2 (줄바꿈 2번하는 경우 선으로 구분)",
+            "기질 2 (줄바꿈 2번 -> 선)",
             height=250,
             placeholder="예: 전반적으로 우수한 지능을 보이며, 특히 언어이해 영역에서 높은 수행을 보였습니다. ...",
             value=TCI_scores[3][1][4]
+        )
+        요약및제언1 = st.text_area(
+            "기질 최적화 양육 방법1 (- -> 굵은 글씨)",
+            height=250,
+            placeholder="예: 전반적으로 우수한 지능을 보이며, 특히 언어이해 영역에서 높은 수행을 보였습니다. ...",
+            value=TCI_scores[4][0][4]
+        )
+        요약및제언2 = st.text_area(
+            "기질 최적화 양육 방법2 (- -> 굵은 글씨)",
+            height=250,
+            placeholder="예: 전반적으로 우수한 지능을 보이며, 특히 언어이해 영역에서 높은 수행을 보였습니다. ...",
+            value=TCI_scores[4][1][4]
+        )
+        성격 = st.text_area(
+            "성격 (줄바꿈 2번 -> 선)",
+            height=250,
+            placeholder="예: 전반적으로 우수한 지능을 보이며, 특히 언어이해 영역에서 높은 수행을 보였습니다. ...",
+            value=TCI_scores[3][2][4]
+        )
+        요약및제언3 = st.text_area(
+            "성숙한 성격 발달 방법 (비어있는 경우 미생성)",
+            height=250,
+            placeholder="예: 전반적으로 우수한 지능을 보이며, 특히 언어이해 영역에서 높은 수행을 보였습니다. ...",
+            value=TCI_scores[4][2][4]
+        )
+
+    if PAT_fileflag == 1:
+        
+        st.subheader("👨👩 부모 양육태도 검사 (자동 생성)")
+        부모_양육태도_이상 = st.text_area(
+            "부모 양육태도 검사 - 이상적",
+            height=250,
+            placeholder="예: 아이의 성과나 수행에 대해 적절한 수준의 압력을 제공하고 있습니다. ...",
+            value=PAT_scores['ideal'][1]
+        )
+        부모_양육태도_비이상 = st.text_area(
+            "부모 양육태도 검사 - 비이상적",
+            height=250,
+            placeholder="예: 아이에게 애정, 지지나 격려의 표현을 적게 하는 편입니다. ...",
+            value=PAT_scores['ideal'][3]
         )
 
     submit = st.form_submit_button("📄 PDF 리포트 생성")
@@ -321,16 +449,16 @@ if INT_fileflag == 1:
     for i in IntelligenceDomain.keys():
         IntelligenceDomain[i][4]=default_summary[i]
 
-# 7. PDF 생성
+
 if submit:
-    # 업데이트된 정보 반영
+    
     merged_info.update({
         "이름": name,
         "생년월일": birth,
         "검사일자": exam_date,
         "교육": education,
         "실시검사": tests,
-        "검사태도": attitude  # ← 추가된 라인
+        "검사태도": attitude  
     })
     def safe_get_index_value(index_scores, keys: list[str], field="지표점수", default=None):
         for key in keys:
@@ -339,38 +467,38 @@ if submit:
         return default
 
     if INT_fileflag == 1:
-        # 필요한 값 추출
+        
         index_scores = INT_scores["지표점수"]
 
-        # --- 전체 지능 지수 (FSIQ)
+        
         fsiq_score = safe_get_index_value(index_scores, ["전체IQ", "전체검사"], field="지표점수", default=100)
         fsiq_percentile_raw = safe_get_index_value(index_scores, ["전체IQ", "전체검사"], field="백분위", default="50")
         confidence_interval_raw = safe_get_index_value(index_scores, ["전체IQ", "전체검사"], field="신뢰구간", default="")
-        ci_min, ci_max = 100, 120  # 기본값
+        ci_min, ci_max = 100, 120  
 
-        # 문자열일 경우 파싱
+        
         if isinstance(confidence_interval_raw, str):
-            for delim in ['~', '-', '–']:  # 일반 하이픈, 물결, 긴 하이픈(복사된 PDF에서 자주 발생)
+            for delim in ['~', '-', '–']:  
                 if delim in confidence_interval_raw:
                     try:
                         parts = confidence_interval_raw.split(delim)
                         ci_min = int(parts[0].strip())
                         ci_max = int(parts[1].strip())
-                        break  # 성공 시 반복 종료
+                        break  
                     except Exception as e:
                         print("⚠️ 신뢰구간 파싱 실패:", e)
                         continue
 
-        # --- 백분위는 %로 계산 (낮을수록 상위)
+        
         try:
             fsiq_percentile = 100 - int(fsiq_percentile_raw)
         except:
             fsiq_percentile = int(100 - float(fsiq_percentile_raw))
 
-        # --- 주요 지표 이름 목록
+        
         subtest_keys = ["언어이해", "시공간", "유동추론", "지각추론", "작업기억", "처리속도"]
 
-        # --- 유효 점수만 필터링 (문자열 숫자도 int로 변환)
+        
         valid_items = {}
         diagnosis_labels = {}
 
@@ -383,9 +511,9 @@ if submit:
                 valid_items[k] = score
                 diagnosis_labels[k] = raw_diagnosis
             except:
-                continue  # 지표점수가 int로 변환되지 않으면 건너뜀
+                continue  
 
-        # 전체IQ 진단분류 추가
+        
         if "전체IQ" in index_scores:
             diagnosis_labels["전체IQ"] = index_scores["전체IQ"].get("진단분류", "")
 
@@ -396,13 +524,13 @@ if submit:
             weakness_label = f"{sorted_items[-1][0]} 지표"
             weakness_score = sorted_items[-1][1]
         else:
-            # 기본값 처리
+            
             strength_label = "언어이해 지표"
             strength_score = 100
             weakness_label = "처리속도 지표"
             weakness_score = 100
 
-        # --- sub_scores: 백분위 → 100 - 값 (% 상위값)
+        
         sub_scores = {}
         for k in ["언어이해", "지각추론", "시공간", "유동추론", "작업기억", "처리속도"]:
             raw_percentile = index_scores.get(k, {}).get("백분위", "")
@@ -411,10 +539,10 @@ if submit:
                 val = float(str(raw_percentile).strip())
                 sub_scores[k] = int(100 - val)
             except (ValueError, TypeError):
-                # 값이 없거나 숫자로 변환 불가 → 저장하지 않음
+                
                 continue
 
-        # 모든 지표점수만 추출
+        
         all_index_scores = {}
         for key, value in INT_scores["지표점수"].items():
             try:
@@ -434,7 +562,7 @@ if submit:
             "ci_max": ci_max,
             "diagnosis_labels": diagnosis_labels,
             "subtest_scores": INT_scores.get("소검사점수", {}),
-            **{"index_scores_all": all_index_scores},  # ✅ 추가
+            **{"index_scores_all": all_index_scores},  
             "IntelligenceDomain": IntelligenceDomain,
             "final_summary": final_summary,
             "INT_filename": INT_filename,
@@ -443,6 +571,15 @@ if submit:
     if TCI_fileflag == 1:
         TCI_scores[3][0][4] = 기질1
         TCI_scores[3][1][4] = 기질2
+        TCI_scores[3][2][4] = 성격
+        TCI_scores[4][0][4] = 요약및제언1
+        TCI_scores[4][1][4] = 요약및제언2
+        TCI_scores[4][2][4] = 요약및제언3
+
+    if PAT_fileflag == 1:
+        PAT_scores['ideal'][1] = 부모_양육태도_이상
+        PAT_scores['ideal'][3] = 부모_양육태도_비이상
+
 
     output_path = os.path.join(tempfile.gettempdir(), "generated_report.pdf")
     try:
@@ -455,14 +592,14 @@ if submit:
             PAT_scores=PAT_scores if PAT_fileflag == 1 else None,
             TCI_filename=TCI_filename if TCI_fileflag == 1 else None,
             PAT_filename=PAT_filename if PAT_fileflag == 1 else None,
+            custom_pages=st.session_state.custom_pages, 
+            examiner=examiner,
         )
         with open(output_path, "rb") as f:
             st.success("✅ PDF 생성이 완료되었습니다!")
-            st.download_button("📥 리포트 다운로드", f, file_name="굿이너프_리포트.pdf", mime="application/pdf")
+            st.download_button("📥 리포트 다운로드", f, file_name=f"{title}_리포트.pdf", mime="application/pdf")
     except Exception as e:
         st.error(f"🚨 PDF 생성 중 오류가 발생했습니다: {e}")
         st.text("🔍 전체 오류 내용:")
-        st.text(traceback.format_exc())  # 전체 스택 추적 로그 출력
-
-
+        st.text(traceback.format_exc())  
 
