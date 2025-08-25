@@ -73,7 +73,9 @@ if "temp_paths" not in st.session_state:
     st.session_state.temp_paths = []
     
 examiner = load_temperament_dict_from_drive("1n6VEjr0QBMOdmT-TG_VjP3VL3dxUS75o")
+examiner = examiner.get("examiner", "")
 title = load_temperament_dict_from_drive("1h_jT9f5IJA4GVmG12ffzhrlaQNeSknmg")
+title = title.get("title", "")
 
 
 
