@@ -292,8 +292,8 @@ st.subheader("🙋‍♂️ 개발자 공지")
 st.text_area(
     "",
     height=250,
-    value="0. 파일을 업로드할 때는 항상 초기화 실행 후 업로드"
-          "1. 현재 지능검사 WAIS의 경우 진단 분류 기준 확인 불가로 잘못 기재될 수 있음"
+    value="파일을 업로드할 때는 항상 초기화 실행 후 업로드"
+          
 )
 
 
@@ -604,5 +604,6 @@ if submit:
         st.error(f"🚨 PDF 생성 중 오류가 발생했습니다: {e}")
         st.text("🔍 전체 오류 내용:")
         st.text(traceback.format_exc())  
+
 
 
