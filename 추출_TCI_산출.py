@@ -188,7 +188,7 @@ def main(pdf_path: str, json_path: str):
             TempanswerList.append([part,key,matched_key if matched_key else '없음',status,summary_dict[matched_key].replace("**", "")])
             print(f"- 설명:\n{summary_dict[matched_key]}")
         else:
-            TempanswerList.append([part, key, matched_key if matched_key else '없음', status, '설명이 없습니다. 관리자에게 문의하세요.'])
+            TempanswerList.append([part, key, matched_key if matched_key else '없음', status, ''])
             print("- 설명: ❌ 해당 키에 대한 설명이 없습니다.")
 
     matching_keys = build_matching_Summary_keys(hml_values, m_sd)
@@ -207,7 +207,7 @@ def main(pdf_path: str, json_path: str):
             SumanswerList.append([part,key,matched_key if matched_key else '없음',status,summary_dict[matched_key].replace("**", "")])
             print(f"- 설명:\n{summary_dict[matched_key]}")
         else:
-            SumanswerList.append([part, key, matched_key if matched_key else '없음', status, '설명이 없습니다. 관리자에게 문의하세요.'])
+            SumanswerList.append([part, key, matched_key if matched_key else '없음', status, ''])
             print("- 설명: ❌ 해당 키에 대한 설명이 없습니다.")
 
 
@@ -236,4 +236,5 @@ if __name__ == "__main__":
         print("-", k)
 
     main(pdf_file, json_file)
+
 
